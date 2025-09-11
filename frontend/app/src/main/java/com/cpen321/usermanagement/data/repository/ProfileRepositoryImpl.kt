@@ -60,9 +60,9 @@ class ProfileRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun updateProfile(name: String, bio: String): Result<User> {
+    override suspend fun updateProfile(name: String, bio: String, profilePicture: String?): Result<User> {
         return try {
-            val updateRequest = UpdateProfileRequest(name = name, bio = bio)
+            val updateRequest = UpdateProfileRequest(name = name, bio = bio, profilePicture = profilePicture)
             val response = userInterface.updateProfile("", updateRequest) // Auth header is handled by interceptor
             if (response.isSuccessful && response.body()?.data != null) {
                 Result.success(response.body()!!.data!!.user)

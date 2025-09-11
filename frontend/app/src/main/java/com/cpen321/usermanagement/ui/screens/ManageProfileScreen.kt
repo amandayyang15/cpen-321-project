@@ -155,7 +155,7 @@ fun ManageProfileScreen(
         onBioChange = { formState = formState.copy(bio = it) },
         onEditPictureClick = { showImagePickerDialog = true },
         onSaveClick = {
-            profileViewModel.updateProfile(formState.name, formState.bio)
+            profileViewModel.updateProfile(formState.name, formState.bio, uiState.user?.profilePicture)
         },
         onImagePickerDismiss = { showImagePickerDialog = false },
         onImageSelected = { uri ->

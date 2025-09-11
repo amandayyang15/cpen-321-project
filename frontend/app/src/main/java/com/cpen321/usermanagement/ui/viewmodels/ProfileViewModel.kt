@@ -150,11 +150,13 @@ class ProfileViewModel @Inject constructor(
         viewModelScope.launch {
             val currentUser = _uiState.value.user ?: return@launch
             val updatedUser = currentUser.copy(profilePicture = pictureUri.toString())
-            _uiState.value = _uiState.value.copy(isLoadingPhoto = false, user= updatedUser, successMessage = "Profile picture updated successfully!")
+            _uiState.value = _uiState.value.copy(isLoadingPhoto = false, user = updatedUser, successMessage = "Profile picture updated successfully!")
+            // Save the new photo to backend immediately
+            updateProfile(currentUser.name, currentUser.bio ?: "", pictureUri.toString())
         }
     }
 
-    fun updateProfile(name: String, bio: String, onSuccess: () -> Unit = {}) {
+    fun updateProfile(name: String, bio: String, profilePicture: String? = null, onSuccess: () -> Unit = {}) {
         viewModelScope.launch {
             _uiState.value =
                 _uiState.value.copy(
@@ -163,7 +165,9 @@ class ProfileViewModel @Inject constructor(
                     successMessage = null
                 )
 
-            val result = profileRepository.updateProfile(name, bio)
+            val currentProfilePicture = profilePicture ?: _uiState.value.user?.profilePicture
+
+            val result = profileRepository.updateProfile(name, bio, currentProfilePicture)
             if (result.isSuccess) {
                 val updatedUser = result.getOrNull()!!
                 _uiState.value = _uiState.value.copy(
