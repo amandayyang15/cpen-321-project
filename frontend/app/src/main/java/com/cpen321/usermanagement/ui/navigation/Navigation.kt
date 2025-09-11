@@ -190,8 +190,10 @@ private fun AppNavHost(
                     onBackClick = { navigationStateManager.navigateBack() },
                     onManageProfileClick = { navigationStateManager.navigateToManageProfile() },
                     onManageHobbiesClick = { navigationStateManager.navigateToManageHobbies() },
+                    onSignOutClick = { navigationStateManager.navigateToAuthWithMessage("Signed Out")},
                     onAccountDeleted = { navigationStateManager.handleAccountDeletion() }
-                )
+                ),
+                navigationStateManager = navigationStateManager
             )
         }
 
