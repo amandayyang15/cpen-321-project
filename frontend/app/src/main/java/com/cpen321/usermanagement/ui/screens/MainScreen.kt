@@ -156,21 +156,6 @@ private fun MainBody(
             .padding(paddingValues),
         contentAlignment = Alignment.Center
     ) {
-        WelcomeMessage()
+        TicTacToeGame()
     }
-}
-
-@Composable
-private fun WelcomeMessage(
-    modifier: Modifier = Modifier
-) {
-    val fontSizes = LocalFontSizes.current
-
-    Text(
-        text = stringResource(R.string.welcome),
-        style = MaterialTheme.typography.bodyLarge,
-        fontSize = fontSizes.extraLarge3,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = modifier
-    )
 }
