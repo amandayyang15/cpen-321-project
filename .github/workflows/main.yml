@@ -1,0 +1,44 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Copy files to EC2
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_KEY }}
+          source: "."
+          target: "/home/ubuntu/cpen321-tutorial"
+
+      - name: Rebuild and Redeploy
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_KEY }}
+          script: |
+            cd /home/ubuntu/cpen321-tutorial
+            # Write secrets into .env
+            cat > .env <<EOF
+            PORT=${{ secrets.PROD_PORT }}
+            MONGODB_URI=${{ secrets.PROD_MONGODB_URI }}
+            EOF
+
+            # Give .env permissions
+            chmod 600 .env
+
+            # Build and run container
+            docker-compose down
+            docker-compose --env-file .env build
+            docker-compose --env-file .env up -d
