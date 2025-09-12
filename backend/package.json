@@ -5,6 +5,7 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
+    "docker": "dotenv -e .env -- npx nodemon -e .ts index.ts",
     "dev": "nodemon --exec ts-node src/index.ts",
     "format": "prettier --check \"src/**/*.{ts,js,json}\"",
     "format:fix": "prettier --write \"src/**/*.{ts,js,json}\""
