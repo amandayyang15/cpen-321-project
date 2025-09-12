@@ -33,6 +33,8 @@ jobs:
             cat > .env <<EOF
             PORT=${{ secrets.PROD_PORT }}
             MONGODB_URI=${{ secrets.PROD_MONGODB_URI }}
+            GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}
+            JWT_SECRET=${{ secrets.JWT_SECRET }}
             EOF
 
             # Give .env permissions
