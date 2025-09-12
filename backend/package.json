@@ -4,7 +4,7 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
-    "start": "node dist/index.js",
+    "start": "ts-node src/index.ts",
     "docker": "dotenv -e .env -- npx nodemon -e .ts index.ts",
     "dev": "nodemon --exec ts-node src/index.ts",
     "format": "prettier --check \"src/**/*.{ts,js,json}\"",
