@@ -14,6 +14,14 @@ export interface IUser extends Document {
   hobbies: string[];
   createdAt: Date;
   updatedAt: Date;
+  
+  // Project relationships (new fields for project management)
+  ownedProjects: mongoose.Types.ObjectId[];
+  memberProjects: mongoose.Types.ObjectId[];
+  
+  // Google Calendar integration (for future use)
+  calendarRefreshToken?: string;
+  calendarEnabled: boolean;
 }
 
 // Zod schemas
@@ -25,6 +33,10 @@ export const createUserSchema = z.object({
   profilePicture: z.string().optional(),
   bio: z.string().max(500).optional(),
   hobbies: z.array(z.string()).default([]),
+  ownedProjects: z.array(z.string()).default([]),
+  memberProjects: z.array(z.string()).default([]),
+  calendarRefreshToken: z.string().optional(),
+  calendarEnabled: z.boolean().default(false),
 });
 
 export const updateProfileSchema = z.object({
@@ -37,6 +49,8 @@ export const updateProfileSchema = z.object({
     })
     .optional(),
   profilePicture: z.string().min(1).optional(),
+  calendarRefreshToken: z.string().optional(),
+  calendarEnabled: z.boolean().optional(),
 });
 
 // Request types

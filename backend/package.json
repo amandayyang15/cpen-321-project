@@ -7,6 +7,12 @@
     "start": "ts-node backend/src/index.ts",
     "docker": "dotenv -e .env -- npx nodemon -e .ts index.ts",
     "dev": "nodemon --exec ts-node src/index.ts",
+    "init-db": "ts-node src/database-init.ts",
+    "seed-db": "ts-node src/seed-database.ts",
+    "force-reseed": "ts-node src/force-reseed.ts",
+    "show-db": "ts-node src/show-database.ts",
+    "cleanup-db": "ts-node -e \"import('./src/database-init').then(m => m.cleanupExpiredData())\"",
+    "db-stats": "ts-node -e \"import('./src/database-init').then(m => m.getDatabaseStats().then(console.log))\"",
     "format": "prettier --check \"src/**/*.{ts,js,json}\"",
     "format:fix": "prettier --write \"src/**/*.{ts,js,json}\""
   },

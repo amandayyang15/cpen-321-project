@@ -55,6 +55,26 @@ const userSchema = new Schema<IUser>(
           'Hobbies must be non-empty strings and must be in the available hobbies list',
       },
     },
+    ownedProjects: {
+      type: [Schema.Types.ObjectId],
+      ref: 'Project',
+      default: [],
+      index: true,
+    },
+    memberProjects: {
+      type: [Schema.Types.ObjectId],
+      ref: 'Project',
+      default: [],
+      index: true,
+    },
+    calendarRefreshToken: {
+      type: String,
+      required: false,
+    },
+    calendarEnabled: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,
@@ -140,6 +160,73 @@ export class UserModel {
     } catch (error) {
       console.error('Error finding user by Google ID:', error);
       throw new Error('Failed to find user');
+    }
+  }
+
+  async addOwnedProject(userId: mongoose.Types.ObjectId, projectId: mongoose.Types.ObjectId): Promise<IUser | null> {
+    try {
+      return await this.user.findByIdAndUpdate(
+        userId,
+        { $addToSet: { ownedProjects: projectId } },
+        { new: true }
+      );
+    } catch (error) {
+      console.error('Error adding owned project:', error);
+      throw new Error('Failed to add owned project');
+    }
+  }
+
+  async addMemberProject(userId: mongoose.Types.ObjectId, projectId: mongoose.Types.ObjectId): Promise<IUser | null> {
+    try {
+      return await this.user.findByIdAndUpdate(
+        userId,
+        { $addToSet: { memberProjects: projectId } },
+        { new: true }
+      );
+    } catch (error) {
+      console.error('Error adding member project:', error);
+      throw new Error('Failed to add member project');
+    }
+  }
+
+  async removeOwnedProject(userId: mongoose.Types.ObjectId, projectId: mongoose.Types.ObjectId): Promise<IUser | null> {
+    try {
+      return await this.user.findByIdAndUpdate(
+        userId,
+        { $pull: { ownedProjects: projectId } },
+        { new: true }
+      );
+    } catch (error) {
+      console.error('Error removing owned project:', error);
+      throw new Error('Failed to remove owned project');
+    }
+  }
+
+  async removeMemberProject(userId: mongoose.Types.ObjectId, projectId: mongoose.Types.ObjectId): Promise<IUser | null> {
+    try {
+      return await this.user.findByIdAndUpdate(
+        userId,
+        { $pull: { memberProjects: projectId } },
+        { new: true }
+      );
+    } catch (error) {
+      console.error('Error removing member project:', error);
+      throw new Error('Failed to remove member project');
+    }
+  }
+
+  async getUserProjects(userId: mongoose.Types.ObjectId): Promise<{ ownedProjects: IUser['ownedProjects'], memberProjects: IUser['memberProjects'] } | null> {
+    try {
+      const user = await this.user.findById(userId).select('ownedProjects memberProjects');
+      if (!user) return null;
+      
+      return {
+        ownedProjects: user.ownedProjects,
+        memberProjects: user.memberProjects
+      };
+    } catch (error) {
+      console.error('Error getting user projects:', error);
+      throw new Error('Failed to get user projects');
     }
   }
 }
