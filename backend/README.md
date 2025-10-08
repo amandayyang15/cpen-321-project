@@ -1,3 +1,36 @@
+## Assignment 2 run tests:
+
+collections 25 bug:
+Manual test file can be located at:
+src/test/java/org/apache/commons/collections4/IteratorUtilsCollatedIteratorTest.java
+
+Tests can be ran with:
+mvn test -Dtest=IteratorUtilsCollatedIteratorTest -Djacoco.skip=true 
+
+The AI test can be found at:
+src/test/java/org/apache/commons/collections4/IteratorUtilsCollections25Test.java
+
+and can be ran with
+mvn test -Dtest=IteratorUtilsCollections25Test -Djacoco.skip=true 
+
+jacksonXml 3 bug:
+Manual test file can be located at:
+src/test/java/com/fasterxml/jackson/dataformat/xml/deser/FromXmlParserCoverageTest.java
+
+Tests can be ran with:
+mvn test -Dtest=FromXmlParserCoverageTest -Djacoco.skip=true 
+
+The AI test can be found at:
+src/test/java/com/fasterxml/jackson/dataformat/xml/deser/FromXmlParserExtendedCoverageTest.java
+
+and can be ran with
+mvn test -Dtest=FromXmlParserExtendedCoverageTest -Djacoco.skip=true 
+
+cli 15 bug
+The AI tests can be found at:
+assignment2/cli-15-fixed/src/test/Foo_AIGeneratedTest.java
+
+
 # Backend Setup
 
 ## Requirements
