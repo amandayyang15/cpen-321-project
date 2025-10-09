@@ -27,6 +27,7 @@ import com.cpen321.usermanagement.ui.components.MessageSnackbar
 import com.cpen321.usermanagement.ui.components.MessageSnackbarState
 import com.cpen321.usermanagement.ui.viewmodels.MainUiState
 import com.cpen321.usermanagement.ui.viewmodels.MainViewModel
+import com.cpen321.usermanagement.ui.viewmodels.ProjectViewModel
 import com.cpen321.usermanagement.ui.theme.LocalFontSizes
 import com.cpen321.usermanagement.ui.theme.LocalSpacing
 import com.cpen321.usermanagement.ui.navigation.NavigationStateManager
@@ -34,6 +35,7 @@ import com.cpen321.usermanagement.ui.navigation.NavigationStateManager
 @Composable
 fun MainScreen(
     mainViewModel: MainViewModel,
+    projectViewModel: ProjectViewModel,
     navigationStateManager: NavigationStateManager,
     onProfileClick: () -> Unit
 ) {
@@ -43,6 +45,7 @@ fun MainScreen(
     MainContent(
         uiState = uiState,
         snackBarHostState = snackBarHostState,
+        projectViewModel = projectViewModel,
         navigationStateManager = navigationStateManager,
         onProfileClick = onProfileClick,
         onSuccessMessageShown = mainViewModel::clearSuccessMessage
@@ -53,6 +56,7 @@ fun MainScreen(
 private fun MainContent(
     uiState: MainUiState,
     snackBarHostState: SnackbarHostState,
+    projectViewModel: ProjectViewModel,
     navigationStateManager: NavigationStateManager,
     onProfileClick: () -> Unit,
     onSuccessMessageShown: () -> Unit,
@@ -73,6 +77,7 @@ private fun MainContent(
     ) { paddingValues ->
         MainBody(
             paddingValues = paddingValues,
+            projectViewModel = projectViewModel,
             navigationStateManager = navigationStateManager
         )
     }
@@ -155,6 +160,7 @@ private fun MainSnackbarHost(
 @Composable
 private fun MainBody(
     paddingValues: PaddingValues,
+    projectViewModel: ProjectViewModel,
     navigationStateManager: NavigationStateManager,
     modifier: Modifier = Modifier
 ) {
@@ -164,6 +170,9 @@ private fun MainBody(
             .padding(paddingValues),
         contentAlignment = Alignment.Center
     ) {
-        HomePage(navigationStateManager = navigationStateManager)
+        HomePage(
+            navigationStateManager = navigationStateManager,
+            projectViewModel = projectViewModel
+        )
     }
 }

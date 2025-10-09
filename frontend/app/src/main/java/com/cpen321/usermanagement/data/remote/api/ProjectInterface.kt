@@ -1,0 +1,33 @@
+package com.cpen321.usermanagement.data.remote.api
+
+import com.cpen321.usermanagement.data.remote.dto.ApiResponse
+import com.cpen321.usermanagement.data.remote.dto.CreateProjectRequest
+import com.cpen321.usermanagement.data.remote.dto.Project
+import com.cpen321.usermanagement.data.remote.dto.UpdateProjectRequest
+import retrofit2.Response
+import retrofit2.http.Body
+import retrofit2.http.DELETE
+import retrofit2.http.GET
+import retrofit2.http.POST
+import retrofit2.http.PUT
+import retrofit2.http.Path
+
+interface ProjectInterface {
+    @POST("projects")
+    suspend fun createProject(@Body request: CreateProjectRequest): Response<ApiResponse<Project>>
+
+    @GET("projects")
+    suspend fun getUserProjects(): Response<ApiResponse<List<Project>>>
+
+    @GET("projects/{projectId}")
+    suspend fun getProjectById(@Path("projectId") projectId: String): Response<ApiResponse<Project>>
+
+    @PUT("projects/{projectId}")
+    suspend fun updateProject(
+        @Path("projectId") projectId: String,
+        @Body request: UpdateProjectRequest
+    ): Response<ApiResponse<Project>>
+
+    @DELETE("projects/{projectId}")
+    suspend fun deleteProject(@Path("projectId") projectId: String): Response<ApiResponse<Unit>>
+}

@@ -2,6 +2,10 @@ package com.cpen321.usermanagement.di
 
 import android.content.Context
 import com.cpen321.usermanagement.data.local.preferences.TokenManager
+import com.cpen321.usermanagement.data.remote.api.ProjectInterface
+import com.cpen321.usermanagement.data.repository.ProjectRepository
+import com.cpen321.usermanagement.data.repository.ProjectRepositoryImpl
+import com.cpen321.usermanagement.data.remote.api.RetrofitClient
 import com.cpen321.usermanagement.ui.navigation.NavigationStateManager
 import dagger.Module
 import dagger.Provides
@@ -26,5 +30,19 @@ object DataModule {
     @Singleton
     fun provideNavigationStateManager(): NavigationStateManager {
         return NavigationStateManager()
+    }
+
+    @Provides
+    @Singleton
+    fun provideProjectInterface(): ProjectInterface {
+        return RetrofitClient.projectInterface
+    }
+
+    @Provides
+    @Singleton
+    fun provideProjectRepository(
+        projectInterface: ProjectInterface
+    ): ProjectRepository {
+        return ProjectRepositoryImpl(projectInterface)
     }
 }
