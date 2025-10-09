@@ -29,10 +29,12 @@ import com.cpen321.usermanagement.ui.viewmodels.MainUiState
 import com.cpen321.usermanagement.ui.viewmodels.MainViewModel
 import com.cpen321.usermanagement.ui.theme.LocalFontSizes
 import com.cpen321.usermanagement.ui.theme.LocalSpacing
+import com.cpen321.usermanagement.ui.navigation.NavigationStateManager
 
 @Composable
 fun MainScreen(
     mainViewModel: MainViewModel,
+    navigationStateManager: NavigationStateManager,
     onProfileClick: () -> Unit
 ) {
     val uiState by mainViewModel.uiState.collectAsState()
@@ -41,6 +43,7 @@ fun MainScreen(
     MainContent(
         uiState = uiState,
         snackBarHostState = snackBarHostState,
+        navigationStateManager = navigationStateManager,
         onProfileClick = onProfileClick,
         onSuccessMessageShown = mainViewModel::clearSuccessMessage
     )
@@ -50,6 +53,7 @@ fun MainScreen(
 private fun MainContent(
     uiState: MainUiState,
     snackBarHostState: SnackbarHostState,
+    navigationStateManager: NavigationStateManager,
     onProfileClick: () -> Unit,
     onSuccessMessageShown: () -> Unit,
     modifier: Modifier = Modifier
@@ -67,7 +71,10 @@ private fun MainContent(
             )
         }
     ) { paddingValues ->
-        MainBody(paddingValues = paddingValues)
+        MainBody(
+            paddingValues = paddingValues,
+            navigationStateManager = navigationStateManager
+        )
     }
 }
 
@@ -148,6 +155,7 @@ private fun MainSnackbarHost(
 @Composable
 private fun MainBody(
     paddingValues: PaddingValues,
+    navigationStateManager: NavigationStateManager,
     modifier: Modifier = Modifier
 ) {
     Box(
@@ -156,6 +164,6 @@ private fun MainBody(
             .padding(paddingValues),
         contentAlignment = Alignment.Center
     ) {
-        TicTacToeGame()
+        HomePage(navigationStateManager = navigationStateManager)
     }
 }

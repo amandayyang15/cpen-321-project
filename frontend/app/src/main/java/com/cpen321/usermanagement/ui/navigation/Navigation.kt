@@ -20,6 +20,7 @@ import com.cpen321.usermanagement.ui.screens.ManageProfileScreen
 import com.cpen321.usermanagement.ui.screens.ProfileScreenActions
 import com.cpen321.usermanagement.ui.screens.ProfileCompletionScreen
 import com.cpen321.usermanagement.ui.screens.ProfileScreen
+import com.cpen321.usermanagement.ui.screens.ProjectView
 import com.cpen321.usermanagement.ui.viewmodels.AuthViewModel
 import com.cpen321.usermanagement.ui.viewmodels.MainViewModel
 import com.cpen321.usermanagement.ui.viewmodels.NavigationViewModel
@@ -33,6 +34,7 @@ object NavRoutes {
     const val MANAGE_PROFILE = "manage_profile"
     const val MANAGE_HOBBIES = "manage_hobbies"
     const val PROFILE_COMPLETION = "profile_completion"
+    const val PROJECT_VIEW = "project_view"
 }
 
 @Composable
@@ -128,6 +130,11 @@ private fun handleNavigationEvent(
             navigationStateManager.clearNavigationEvent()
         }
 
+        is NavigationEvent.NavigateToProjectView -> {
+            navController.navigate(NavRoutes.PROJECT_VIEW)
+            navigationStateManager.clearNavigationEvent()
+        }
+
         is NavigationEvent.NavigateBack -> {
             navController.popBackStack()
             navigationStateManager.clearNavigationEvent()
@@ -178,6 +185,7 @@ private fun AppNavHost(
         composable(NavRoutes.MAIN) {
             MainScreen(
                 mainViewModel = mainViewModel,
+                navigationStateManager = navigationStateManager,
                 onProfileClick = { navigationStateManager.navigateToProfile() }
             )
         }
@@ -209,6 +217,10 @@ private fun AppNavHost(
                 profileViewModel = profileViewModel,
                 onBackClick = { navigationStateManager.navigateBack() }
             )
+        }
+
+        composable(NavRoutes.PROJECT_VIEW) {
+            ProjectView(navigationStateManager = navigationStateManager)
         }
     }
 }
