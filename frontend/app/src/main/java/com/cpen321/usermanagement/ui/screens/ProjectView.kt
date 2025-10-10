@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -44,6 +45,19 @@ import com.cpen321.usermanagement.ui.theme.LocalSpacing
 import android.util.Log
 import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+data class Expense(
+    val id: String,
+    val description: String,
+    val amount: Double,
+    val paidBy: String,
+    val splitBetween: List<String>,
+    val date: String,
+    val amountPerPerson: Double
+)
 
 @Composable
 fun ProjectView(
@@ -178,6 +192,16 @@ private fun ProjectBody(
     var selectedUserToRemove by remember { mutableStateOf("") }
     var removeUserExpanded by remember { mutableStateOf(false) }
 
+    // Expense state
+    var expenses by remember { mutableStateOf(listOf<Expense>()) }
+    var showCreateExpenseDialog by remember { mutableStateOf(false) }
+    var expenseDescription by remember { mutableStateOf("") }
+    var expenseAmount by remember { mutableStateOf("") }
+    var expensePaidBy by remember { mutableStateOf("") }
+    var paidByExpanded by remember { mutableStateOf(false) }
+    var selectedUsersForSplit by remember { mutableStateOf(setOf<String>()) }
+    val availableUsers = listOf("Justin", "Alice", "Bob", "Charlie")
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -259,6 +283,23 @@ private fun ProjectBody(
                 modifier = Modifier.weight(1f)
             ) {
                 Text("Task Board")
+            }
+        }
+        
+        // Add Expense Button (only show when on Expense tab)
+        if (selectedTab == "Expense") {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Button(
+                    onClick = { 
+                        Log.d("ProjectView", "Clicked Add Expense")
+                        showCreateExpenseDialog = true
+                    }
+                ) {
+                    Text("Add Expense")
+                }
             }
         }
         
@@ -630,12 +671,149 @@ private fun ProjectBody(
                 }
                 "Expense" -> {
                     Text(
-                        text = "Expense",
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                        textAlign = TextAlign.Center
+                        text = "Expenses:",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(bottom = spacing.medium)
                     )
+                    
+                    if (expenses.isEmpty()) {
+                        Text(
+                            text = "No expenses added yet",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth().padding(spacing.large)
+                        )
+                    } else {
+                        // Expense Table Header
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = spacing.small, vertical = spacing.medium)
+                                .background(
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    shape = RoundedCornerShape(4.dp)
+                                )
+                                .padding(spacing.medium),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Description",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier
+                                    .weight(1.5f)
+                                    .padding(horizontal = spacing.small),
+                                textAlign = TextAlign.Center
+                            )
+                            Text(
+                                text = "Amount",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(horizontal = spacing.small),
+                                textAlign = TextAlign.Center
+                            )
+                            Text(
+                                text = "Paid By",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(horizontal = spacing.small),
+                                textAlign = TextAlign.Center
+                            )
+                            Text(
+                                text = "Split Between",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier
+                                    .weight(1.5f)
+                                    .padding(horizontal = spacing.small),
+                                textAlign = TextAlign.Center
+                            )
+                            Text(
+                                text = "Per Person",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(horizontal = spacing.small),
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                        
+                        // Expense Table Rows
+                        expenses.forEach { expense ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = spacing.small, vertical = spacing.small)
+                                    .background(
+                                        color = MaterialTheme.colorScheme.surfaceVariant,
+                                        shape = RoundedCornerShape(4.dp)
+                                    )
+                                    .padding(spacing.medium),
+                                horizontalArrangement = Arrangement.SpaceEvenly,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = expense.description,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier
+                                        .weight(1.5f)
+                                        .padding(horizontal = spacing.small),
+                                    textAlign = TextAlign.Center
+                                )
+                                Text(
+                                    text = "$${String.format("%.2f", expense.amount)}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .padding(horizontal = spacing.small),
+                                    textAlign = TextAlign.Center
+                                )
+                                Text(
+                                    text = expense.paidBy,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .padding(horizontal = spacing.small),
+                                    textAlign = TextAlign.Center
+                                )
+                                Text(
+                                    text = expense.splitBetween.joinToString(", "),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier
+                                        .weight(1.5f)
+                                        .padding(horizontal = spacing.small),
+                                    textAlign = TextAlign.Center
+                                )
+                                Text(
+                                    text = "$${String.format("%.2f", expense.amountPerPerson)}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .padding(horizontal = spacing.small),
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -723,6 +901,161 @@ private fun ProjectBody(
                             assignee = ""
                             taskProgress = "In Progress"
                             deadline = ""
+                        }
+                    ) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
+        
+        // Create Expense Dialog
+        if (showCreateExpenseDialog) {
+            AlertDialog(
+                onDismissRequest = { showCreateExpenseDialog = false },
+                title = {
+                    Text("Add New Expense")
+                },
+                text = {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(spacing.medium)
+                    ) {
+                        OutlinedTextField(
+                            value = expenseDescription,
+                            onValueChange = { expenseDescription = it },
+                            label = { Text("Description") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        
+                        OutlinedTextField(
+                            value = expenseAmount,
+                            onValueChange = { expenseAmount = it },
+                            label = { Text("Amount ($)") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        
+                        // Paid By Dropdown
+                        Text(
+                            text = "Paid By:",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Box {
+                            TextButton(
+                                onClick = { paidByExpanded = !paidByExpanded },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    text = expensePaidBy.ifEmpty { "Select who paid" },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    textAlign = TextAlign.Start
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = paidByExpanded,
+                                onDismissRequest = { paidByExpanded = false }
+                            ) {
+                                availableUsers.forEach { user ->
+                                    DropdownMenuItem(
+                                        text = { Text(user) },
+                                        onClick = {
+                                            expensePaidBy = user
+                                            paidByExpanded = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                        
+                        // Split Between Multi-select
+                        Text(
+                            text = "Split between:",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Column {
+                            availableUsers.forEach { user ->
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Checkbox(
+                                        checked = selectedUsersForSplit.contains(user),
+                                        onCheckedChange = { isChecked ->
+                                            selectedUsersForSplit = if (isChecked) {
+                                                selectedUsersForSplit + user
+                                            } else {
+                                                selectedUsersForSplit - user
+                                            }
+                                        }
+                                    )
+                                    Text(
+                                        text = user,
+                                        modifier = Modifier.padding(start = spacing.small)
+                                    )
+                                }
+                            }
+                        }
+                        
+                        if (selectedUsersForSplit.isNotEmpty()) {
+                            Text(
+                                text = "Selected: ${selectedUsersForSplit.joinToString(", ")}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            val amount = expenseAmount.toDoubleOrNull()
+                            if (expenseDescription.isNotBlank() && 
+                                amount != null && amount > 0 && 
+                                expensePaidBy.isNotBlank() && 
+                                selectedUsersForSplit.isNotEmpty()) {
+                                
+                                val amountPerPerson = amount / selectedUsersForSplit.size
+                                val dateFormat = SimpleDateFormat("MMM dd", Locale.getDefault())
+                                val currentDate = dateFormat.format(Date())
+                                
+                                val newExpense = Expense(
+                                    id = System.currentTimeMillis().toString(),
+                                    description = expenseDescription,
+                                    amount = amount,
+                                    paidBy = expensePaidBy,
+                                    splitBetween = selectedUsersForSplit.toList(),
+                                    date = currentDate,
+                                    amountPerPerson = amountPerPerson
+                                )
+                                
+                                expenses = expenses + newExpense
+                                
+                                Log.d("ProjectView", "Expense created: $newExpense")
+                                Toast.makeText(context, "Expense added: $expenseDescription", Toast.LENGTH_SHORT).show()
+                                
+                                // Reset form
+                                showCreateExpenseDialog = false
+                                expenseDescription = ""
+                                expenseAmount = ""
+                                expensePaidBy = ""
+                                selectedUsersForSplit = setOf()
+                            } else {
+                                Toast.makeText(context, "Please fill all fields correctly", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    ) {
+                        Text("Add Expense")
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = { 
+                            showCreateExpenseDialog = false
+                            expenseDescription = ""
+                            expenseAmount = ""
+                            expensePaidBy = ""
+                            selectedUsersForSplit = setOf()
                         }
                     ) {
                         Text("Cancel")
