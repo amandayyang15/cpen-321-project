@@ -225,7 +225,10 @@ private fun AppNavHost(
         }
 
         composable(NavRoutes.PROJECT_VIEW) {
-            ProjectView(navigationStateManager = navigationStateManager)
+            ProjectView(
+                navigationStateManager = navigationStateManager,
+                projectViewModel = projectViewModel
+            )
         }
     }
 }

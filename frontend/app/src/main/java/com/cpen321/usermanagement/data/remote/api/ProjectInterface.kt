@@ -1,7 +1,9 @@
 package com.cpen321.usermanagement.data.remote.api
 
 import com.cpen321.usermanagement.data.remote.dto.ApiResponse
+import com.cpen321.usermanagement.data.remote.dto.AddResourceRequest
 import com.cpen321.usermanagement.data.remote.dto.CreateProjectRequest
+import com.cpen321.usermanagement.data.remote.dto.JoinProjectRequest
 import com.cpen321.usermanagement.data.remote.dto.Project
 import com.cpen321.usermanagement.data.remote.dto.UpdateProjectRequest
 import retrofit2.Response
@@ -15,6 +17,9 @@ import retrofit2.http.Path
 interface ProjectInterface {
     @POST("projects")
     suspend fun createProject(@Body request: CreateProjectRequest): Response<ApiResponse<Project>>
+
+    @POST("projects/join")
+    suspend fun joinProject(@Body request: JoinProjectRequest): Response<ApiResponse<Project>>
 
     @GET("projects")
     suspend fun getUserProjects(): Response<ApiResponse<List<Project>>>
@@ -30,4 +35,10 @@ interface ProjectInterface {
 
     @DELETE("projects/{projectId}")
     suspend fun deleteProject(@Path("projectId") projectId: String): Response<ApiResponse<Unit>>
+
+    @POST("projects/{projectId}/resources")
+    suspend fun addResource(
+        @Path("projectId") projectId: String,
+        @Body request: AddResourceRequest
+    ): Response<ApiResponse<Project>>
 }

@@ -2,6 +2,7 @@ package com.cpen321.usermanagement.ui.screens
 
 import Icon
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,11 +12,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -28,10 +32,12 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import android.util.Log
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -40,10 +46,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.cpen321.usermanagement.R
+import com.cpen321.usermanagement.data.remote.dto.Resource
 import com.cpen321.usermanagement.ui.navigation.NavigationStateManager
 import com.cpen321.usermanagement.ui.theme.LocalSpacing
-import android.util.Log
+import com.cpen321.usermanagement.ui.viewmodels.ProjectViewModel
 import android.widget.Toast
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.platform.LocalContext
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -62,10 +70,12 @@ data class Expense(
 @Composable
 fun ProjectView(
     navigationStateManager: NavigationStateManager,
+    projectViewModel: ProjectViewModel,
     modifier: Modifier = Modifier
 ) {
     ProjectContent(
         navigationStateManager = navigationStateManager,
+        projectViewModel = projectViewModel,
         modifier = modifier
     )
 }
@@ -73,8 +83,19 @@ fun ProjectView(
 @Composable
 private fun ProjectContent(
     navigationStateManager: NavigationStateManager,
+    projectViewModel: ProjectViewModel,
     modifier: Modifier = Modifier
 ) {
+    val uiState by projectViewModel.uiState.collectAsState()
+    
+    // Auto-select first project if none is selected
+    LaunchedEffect(uiState.projects, uiState.selectedProject) {
+        if (uiState.projects.isNotEmpty() && uiState.selectedProject == null) {
+            Log.d("ProjectView", "Auto-selecting first project: ${uiState.projects.first().name}")
+            projectViewModel.selectProject(uiState.projects.first())
+        }
+    }
+    
     Scaffold(
         modifier = modifier,
         topBar = {
@@ -84,7 +105,10 @@ private fun ProjectContent(
             )
         }
     ) { paddingValues ->
-        ProjectBody(paddingValues = paddingValues)
+        ProjectBody(
+            paddingValues = paddingValues,
+            projectViewModel = projectViewModel
+        )
     }
 }
 
@@ -173,10 +197,14 @@ private fun BackIcon() {
 @Composable
 private fun ProjectBody(
     paddingValues: PaddingValues,
+    projectViewModel: ProjectViewModel,
     modifier: Modifier = Modifier
 ) {
     val spacing = LocalSpacing.current
     val context = LocalContext.current
+    val uiState by projectViewModel.uiState.collectAsState()
+    val currentProject = uiState.selectedProject
+    
     var progressExpanded by remember { mutableStateOf(false) }
     var selectedProgress by remember { mutableStateOf("In Progress") }
     var selectedTab by remember { mutableStateOf("Task") }
@@ -186,6 +214,11 @@ private fun ProjectBody(
     var taskProgress by remember { mutableStateOf("In Progress") }
     var deadline by remember { mutableStateOf("") }
     var taskProgressExpanded by remember { mutableStateOf(false) }
+    
+    // Resource state
+    var showAddResourceDialog by remember { mutableStateOf(false) }
+    var resourceName by remember { mutableStateOf("") }
+    var resourceLink by remember { mutableStateOf("") }
     
     // Project Settings state
     var projectName by remember { mutableStateOf("") }
@@ -244,6 +277,8 @@ private fun ProjectBody(
                 onClick = { 
                     Log.d("ProjectView", "Clicked Resource")
                     selectedTab = "Resource"
+                    // Refresh project data to get latest resources
+                    projectViewModel.refreshSelectedProject()
                 },
                 modifier = Modifier.weight(1f)
             ) {
@@ -299,6 +334,23 @@ private fun ProjectBody(
                     }
                 ) {
                     Text("Add Expense")
+                }
+            }
+        }
+        
+        // Add Resource Button (only show when on Resource tab)
+        if (selectedTab == "Resource") {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Button(
+                    onClick = { 
+                        Log.d("ProjectView", "Clicked Add Resource")
+                        showAddResourceDialog = true
+                    }
+                ) {
+                    Text("Add Resource")
                 }
             }
         }
@@ -652,13 +704,70 @@ private fun ProjectBody(
                     }
                 }
                 "Resource" -> {
-                    Text(
-                        text = "Resource",
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                        textAlign = TextAlign.Center
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Resources:",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(bottom = spacing.medium)
+                        )
+                        
+                        // Show refresh button
+                        if (uiState.isLoading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            TextButton(
+                                onClick = { 
+                                    Log.d("ProjectView", "Manual refresh clicked")
+                                    projectViewModel.refreshSelectedProject()
+                                }
+                            ) {
+                                Text("Refresh")
+                            }
+                        }
+                    }
+                    
+                    // Show success message if available
+                    if (uiState.message?.contains("Resource added") == true) {
+                        Text(
+                            text = uiState.message!!,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = spacing.small)
+                        )
+                    }
+                    
+                    if (currentProject?.resources?.isNotEmpty() == true) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(spacing.small)
+                        ) {
+                            currentProject.resources.forEach { resource ->
+                                ResourceItem(
+                                    resource = resource,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        }
+                    } else {
+                        Text(
+                            text = "No resources yet. Add your first resource!",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                 }
                 "Chat" -> {
                     Text(
@@ -1063,5 +1172,167 @@ private fun ProjectBody(
                 }
             )
         }
+        
+        // Add Resource Dialog
+        if (showAddResourceDialog) {
+            AddResourceDialog(
+                onDismiss = { 
+                    showAddResourceDialog = false
+                    resourceName = ""
+                    resourceLink = ""
+                },
+                onAddResource = { name, link ->
+                    Log.d("ProjectView", "onAddResource callback called with: '$name', '$link'")
+                    Log.d("ProjectView", "currentProject: $currentProject")
+                    Log.d("ProjectView", "uiState.selectedProject: ${uiState.selectedProject}")
+                    currentProject?.let { project ->
+                        Log.d("ProjectView", "Calling projectViewModel.addResource with projectId: ${project.id}")
+                        projectViewModel.addResource(project.id, name, link)
+                        Toast.makeText(context, "Resource added successfully!", Toast.LENGTH_SHORT).show()
+                        showAddResourceDialog = false
+                        resourceName = ""
+                        resourceLink = ""
+                    } ?: run {
+                        Log.e("ProjectView", "currentProject is null! Cannot add resource.")
+                        Toast.makeText(context, "Error: No project selected", Toast.LENGTH_SHORT).show()
+                    }
+                },
+                resourceName = resourceName,
+                onResourceNameChange = { resourceName = it },
+                resourceLink = resourceLink,
+                onResourceLinkChange = { resourceLink = it },
+                isAdding = uiState.isCreating,
+                errorMessage = uiState.errorMessage
+            )
+        }
     }
+}
+
+@Composable
+private fun ResourceItem(
+    resource: Resource,
+    modifier: Modifier = Modifier
+) {
+    val spacing = LocalSpacing.current
+    val context = LocalContext.current
+    
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = spacing.small, vertical = spacing.extraSmall)
+            .background(
+                color = MaterialTheme.colorScheme.primaryContainer,
+                shape = RoundedCornerShape(8.dp)
+            )
+            .padding(spacing.medium)
+    ) {
+        Column {
+            Text(
+                text = resource.resourceName,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                fontWeight = FontWeight.Medium
+            )
+            Spacer(modifier = Modifier.height(spacing.extraSmall))
+            Text(
+                text = resource.link,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.clickable {
+                    try {
+                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(resource.link))
+                        context.startActivity(intent)
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "Could not open link", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun AddResourceDialog(
+    onDismiss: () -> Unit,
+    onAddResource: (String, String) -> Unit,
+    resourceName: String,
+    onResourceNameChange: (String) -> Unit,
+    resourceLink: String,
+    onResourceLinkChange: (String) -> Unit,
+    isAdding: Boolean,
+    errorMessage: String?,
+    modifier: Modifier = Modifier
+) {
+    AlertDialog(
+        onDismissRequest = { if (!isAdding) onDismiss() },
+        title = {
+            Text("Add Resource")
+        },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = resourceName,
+                    onValueChange = onResourceNameChange,
+                    label = { Text("Resource Name") },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isAdding,
+                    isError = resourceName.isBlank() && resourceName.isNotEmpty(),
+                    supportingText = if (resourceName.isBlank() && resourceName.isNotEmpty()) {
+                        { Text("Resource name is required") }
+                    } else null
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                OutlinedTextField(
+                    value = resourceLink,
+                    onValueChange = onResourceLinkChange,
+                    label = { Text("Resource Link") },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isAdding,
+                    placeholder = { Text("https://example.com") },
+                    isError = resourceLink.isBlank() && resourceLink.isNotEmpty(),
+                    supportingText = if (resourceLink.isBlank() && resourceLink.isNotEmpty()) {
+                        { Text("Resource link is required") }
+                    } else null
+                )
+                
+                // Display error message if present
+                if (errorMessage != null) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = errorMessage,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    Log.d("ProjectView", "Add button clicked!")
+                    if (resourceName.isNotBlank() && resourceLink.isNotBlank()) {
+                        onAddResource(resourceName, resourceLink)
+                    }
+                },
+                enabled = resourceName.isNotBlank() && resourceLink.isNotBlank() && !isAdding
+            ) {
+                if (isAdding) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Text("Add")
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                enabled = !isAdding
+            ) {
+                Text("Cancel")
+            }
+        }
+    )
 }

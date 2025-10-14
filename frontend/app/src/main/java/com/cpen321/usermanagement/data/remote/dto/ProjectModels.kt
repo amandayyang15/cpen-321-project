@@ -8,6 +8,11 @@ data class ProjectMember(
     val joinedAt: String
 )
 
+data class Resource(
+    val resourceName: String,
+    val link: String
+)
+
 data class Project(
     val id: String,
     val name: String,
@@ -15,6 +20,7 @@ data class Project(
     val invitationCode: String,
     val ownerId: String,
     val members: List<ProjectMember>,
+    val resources: List<Resource> = emptyList(),
     val createdAt: String,
     val updatedAt: String,
     val isOwner: Boolean? = null
@@ -28,4 +34,13 @@ data class CreateProjectRequest(
 data class UpdateProjectRequest(
     val name: String? = null,
     val description: String? = null
+)
+
+data class JoinProjectRequest(
+    val invitationCode: String
+)
+
+data class AddResourceRequest(
+    val resourceName: String,
+    val link: String
 )
