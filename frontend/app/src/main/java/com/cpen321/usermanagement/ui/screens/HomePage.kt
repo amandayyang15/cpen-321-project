@@ -48,6 +48,7 @@ fun HomePage(
     val spacing = LocalSpacing.current
     val uiState by projectViewModel.uiState.collectAsState()
     var showCreateDialog by remember { mutableStateOf(false) }
+    var showJoinDialog by remember { mutableStateOf(false) }
     var refreshTrigger by remember { mutableStateOf(0) }
 
     // Debug logging for state changes
@@ -100,7 +101,7 @@ fun HomePage(
             Button(
                 onClick = { 
                     Log.d("HomePage", "Join Existing Project")
-                    // TODO: Implement join project functionality
+                    showJoinDialog = true
                 },
                 modifier = Modifier
                     .weight(1f)
@@ -180,6 +181,18 @@ fun HomePage(
                 // Force refresh projects after dialog closes
                 projectViewModel.loadUserProjects()
                 refreshTrigger++ // Trigger recomposition
+            }
+        )
+    }
+
+    // Join Project Dialog
+    if (showJoinDialog) {
+        JoinProjectDialog(
+            onDismiss = { showJoinDialog = false },
+            onJoinProject = { code ->
+                // TODO: Implement join project functionality
+                Log.d("HomePage", "Joining project with code: $code")
+                showJoinDialog = false
             }
         )
     }
@@ -308,6 +321,59 @@ private fun CreateProjectDialog(
             TextButton(
                 onClick = onDismiss,
                 enabled = !isCreating
+            ) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+@Composable
+private fun JoinProjectDialog(
+    onDismiss: () -> Unit,
+    onJoinProject: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var projectCode by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text("Join Existing Project")
+        },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = projectCode,
+                    onValueChange = { 
+                        if (it.length <= 8) {
+                            projectCode = it
+                        }
+                    },
+                    label = { Text("Project Code") },
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text("Enter project invitation code") },
+                    maxLines = 1,
+                    singleLine = true
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (projectCode.isNotBlank()) {
+                        Log.d("HomePage", "Dialog: Joining project with code: $projectCode")
+                        onJoinProject(projectCode)
+                    }
+                },
+                enabled = projectCode.isNotBlank()
+            ) {
+                Text("Join")
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss
             ) {
                 Text("Cancel")
             }
