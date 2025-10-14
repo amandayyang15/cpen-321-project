@@ -286,4 +286,74 @@ export class ProjectController {
       res.status(500).json({ message: 'Internal server error' });
     }
   }
+
+  async joinProject(req: Request, res: Response): Promise<void> {
+    try {
+      const { invitationCode } = req.body;
+      const userId = req.user?.id;
+
+      logger.info(`Join project request: invitationCode="${invitationCode}", userId=${userId}`);
+
+      if (!userId) {
+        res.status(401).json({ message: 'User not authenticated' });
+        return;
+      }
+
+      if (!invitationCode || invitationCode.trim().length === 0) {
+        res.status(400).json({ message: 'Invitation code is required' });
+        return;
+      }
+
+      // Find project by invitation code
+      const project = await projectModel.findByInvitationCode(invitationCode.trim());
+
+      if (!project) {
+        logger.warn(`User ${userId} attempted to join project with invalid code: ${invitationCode}`);
+        res.status(404).json({ message: 'Error, no project exists with this code' });
+        return;
+      }
+
+      // Check if user is already a member
+      const isAlreadyMember = project.members.some(member => member.userId.toString() === userId);
+      if (isAlreadyMember) {
+        logger.warn(`User ${userId} attempted to join project they are already a member of: ${project._id}`);
+        res.status(400).json({ message: 'You are already a member of this project' });
+        return;
+      }
+
+      // Add user as a member
+      const memberData = {
+        userId: new mongoose.Types.ObjectId(userId),
+        role: 'user' as const,
+        joinedAt: new Date()
+      };
+
+      const updatedProject = await projectModel.addMember(project._id, memberData);
+
+      if (!updatedProject) {
+        res.status(500).json({ message: 'Failed to join project' });
+        return;
+      }
+
+      logger.info(`User ${userId} joined project: ${project._id}`);
+
+      res.status(200).json({
+        message: 'Successfully joined project',
+        data: {
+          id: updatedProject._id,
+          name: updatedProject.name,
+          description: updatedProject.description,
+          invitationCode: updatedProject.invitationCode,
+          ownerId: updatedProject.ownerId,
+          members: updatedProject.members,
+          createdAt: updatedProject.createdAt,
+          updatedAt: updatedProject.updatedAt,
+          isOwner: false
+        }
+      });
+    } catch (error) {
+      logger.error('Error joining project:', error);
+      res.status(500).json({ message: 'Internal server error' });
+    }
+  }
 }

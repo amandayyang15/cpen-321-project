@@ -17,8 +17,13 @@ const updateProjectSchema = z.object({
   description: z.string().max(1000, 'Description must be less than 1000 characters').optional()
 });
 
+const joinProjectSchema = z.object({
+  invitationCode: z.string().min(1, 'Invitation code is required').max(8, 'Invitation code must be 8 characters or less')
+});
+
 // Routes
 router.post('/', validateBody(createProjectSchema), projectController.createProject);
+router.post('/join', validateBody(joinProjectSchema), projectController.joinProject);
 router.get('/', projectController.getUserProjects);
 router.get('/:projectId', projectController.getProjectById);
 router.put('/:projectId', validateBody(updateProjectSchema), projectController.updateProject);

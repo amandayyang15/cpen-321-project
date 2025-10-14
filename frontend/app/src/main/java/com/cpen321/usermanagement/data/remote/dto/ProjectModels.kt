@@ -29,3 +29,7 @@ data class UpdateProjectRequest(
     val name: String? = null,
     val description: String? = null
 )
+
+data class JoinProjectRequest(
+    val invitationCode: String
+)

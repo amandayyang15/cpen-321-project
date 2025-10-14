@@ -188,13 +188,29 @@ fun HomePage(
     // Join Project Dialog
     if (showJoinDialog) {
         JoinProjectDialog(
-            onDismiss = { showJoinDialog = false },
-            onJoinProject = { code ->
-                // TODO: Implement join project functionality
-                Log.d("HomePage", "Joining project with code: $code")
+            onDismiss = { 
                 showJoinDialog = false
-            }
+                projectViewModel.clearMessages() // Clear any error messages when dismissing
+            },
+            onJoinProject = { code ->
+                Log.d("HomePage", "Joining project with code: $code")
+                projectViewModel.joinProject(code)
+                // Don't close dialog immediately - let user see success/error message
+            },
+            errorMessage = uiState.errorMessage,
+            isJoining = uiState.isCreating
         )
+    }
+
+    // Close join dialog on successful join
+    LaunchedEffect(uiState.message) {
+        if (uiState.message == "Successfully joined project") {
+            showJoinDialog = false
+            projectViewModel.clearMessages()
+            // Force refresh projects after successful join
+            projectViewModel.loadUserProjects()
+            refreshTrigger++ // Trigger recomposition
+        }
     }
 }
 
@@ -332,12 +348,14 @@ private fun CreateProjectDialog(
 private fun JoinProjectDialog(
     onDismiss: () -> Unit,
     onJoinProject: (String) -> Unit,
+    errorMessage: String?,
+    isJoining: Boolean,
     modifier: Modifier = Modifier
 ) {
     var projectCode by remember { mutableStateOf("") }
 
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { if (!isJoining) onDismiss() },
         title = {
             Text("Join Existing Project")
         },
@@ -354,26 +372,45 @@ private fun JoinProjectDialog(
                     modifier = Modifier.fillMaxWidth(),
                     placeholder = { Text("Enter project invitation code") },
                     maxLines = 1,
-                    singleLine = true
+                    singleLine = true,
+                    enabled = !isJoining
                 )
+                
+                // Display error message if present
+                if (errorMessage != null) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = errorMessage,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
             }
         },
         confirmButton = {
             Button(
                 onClick = {
-                    if (projectCode.isNotBlank()) {
+                    if (projectCode.isNotBlank() && !isJoining) {
                         Log.d("HomePage", "Dialog: Joining project with code: $projectCode")
                         onJoinProject(projectCode)
                     }
                 },
-                enabled = projectCode.isNotBlank()
+                enabled = projectCode.isNotBlank() && !isJoining
             ) {
-                Text("Join")
+                if (isJoining) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Text("Join")
+                }
             }
         },
         dismissButton = {
             TextButton(
-                onClick = onDismiss
+                onClick = onDismiss,
+                enabled = !isJoining
             ) {
                 Text("Cancel")
             }

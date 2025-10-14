@@ -41,6 +41,7 @@ class ProjectViewModel @Inject constructor(
     val uiState: StateFlow<ProjectUiState> = _uiState.asStateFlow()
     
     private var isCreatingProject = false
+    private var isJoiningProject = false
 
     init {
         loadUserProjects()
@@ -115,6 +116,55 @@ class ProjectViewModel @Inject constructor(
                         errorMessage = error.message ?: "Failed to create project"
                     )
                     isCreatingProject = false
+                }
+        }
+    }
+
+    fun joinProject(invitationCode: String) {
+        if (invitationCode.isBlank()) {
+            _uiState.value = _uiState.value.copy(
+                errorMessage = "Invitation code cannot be empty"
+            )
+            return
+        }
+
+        // Prevent duplicate calls
+        if (_uiState.value.isCreating || isJoiningProject) {
+            Log.w(TAG, "Project join already in progress, ignoring duplicate call")
+            return
+        }
+
+        Log.d(TAG, "Joining project with code: $invitationCode")
+        isJoiningProject = true
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isCreating = true, errorMessage = null)
+            
+            projectRepository.joinProject(invitationCode.trim())
+                .onSuccess { project ->
+                    Log.d(TAG, "Successfully joined project: ${project.id}")
+                    // Add project to local state immediately for instant UI update
+                    val currentProjects = _uiState.value.projects
+                    val updatedProjects = listOf(project) + currentProjects
+                    Log.d(TAG, "Updated projects list: ${updatedProjects.map { it.name }}")
+                    
+                    // Force state update with explicit copy
+                    val newState = _uiState.value.copy(
+                        isCreating = false,
+                        projects = updatedProjects,
+                        message = "Successfully joined project"
+                    )
+                    _uiState.value = newState
+                    isJoiningProject = false
+                    
+                    Log.d(TAG, "State updated - projects count: ${_uiState.value.projects.size}")
+                }
+                .onFailure { error ->
+                    Log.e(TAG, "Failed to join project", error)
+                    _uiState.value = _uiState.value.copy(
+                        isCreating = false,
+                        errorMessage = error.message ?: "Failed to join project"
+                    )
+                    isJoiningProject = false
                 }
         }
     }
