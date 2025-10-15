@@ -222,7 +222,87 @@ class ProjectViewModel @Inject constructor(
     }
 
     fun selectProject(project: Project) {
+        Log.d(TAG, "selectProject called with project: ${project.name} (${project.id})")
         _uiState.value = _uiState.value.copy(selectedProject = project)
+        Log.d(TAG, "selectedProject updated: ${_uiState.value.selectedProject?.name}")
+    }
+
+    fun addResource(projectId: String, resourceName: String, link: String) {
+        Log.d(TAG, "addResource called with projectId: $projectId, resourceName: '$resourceName', link: '$link'")
+        
+        if (resourceName.isBlank()) {
+            Log.d(TAG, "Resource name is blank, showing error")
+            _uiState.value = _uiState.value.copy(
+                errorMessage = "Resource name cannot be empty"
+            )
+            return
+        }
+
+        if (link.isBlank()) {
+            Log.d(TAG, "Resource link is blank, showing error")
+            _uiState.value = _uiState.value.copy(
+                errorMessage = "Resource link cannot be empty"
+            )
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isCreating = true, errorMessage = null)
+            
+            projectRepository.addResource(projectId, resourceName.trim(), link.trim())
+                .onSuccess { project ->
+                    Log.d(TAG, "Resource added successfully to project: ${project.id}")
+                    // Update the project in the local state
+                    val updatedProjects = _uiState.value.projects.map { p ->
+                        if (p.id == projectId) project else p
+                    }
+                    _uiState.value = _uiState.value.copy(
+                        isCreating = false,
+                        projects = updatedProjects,
+                        selectedProject = if (_uiState.value.selectedProject?.id == projectId) project else _uiState.value.selectedProject,
+                        message = "Resource added successfully"
+                    )
+                }
+                .onFailure { error ->
+                    Log.e(TAG, "Failed to add resource", error)
+                    _uiState.value = _uiState.value.copy(
+                        isCreating = false,
+                        errorMessage = error.message ?: "Failed to add resource"
+                    )
+                }
+        }
+    }
+
+    fun refreshSelectedProject() {
+        val selectedProject = _uiState.value.selectedProject
+        if (selectedProject != null) {
+            Log.d(TAG, "Refreshing selected project: ${selectedProject.name}")
+            viewModelScope.launch {
+                projectRepository.getProjectById(selectedProject.id)
+                    .onSuccess { updatedProject ->
+                        Log.d(TAG, "Project refreshed successfully: ${updatedProject.name}")
+                        // Update the project in the local state
+                        val updatedProjects = _uiState.value.projects.map { p ->
+                            if (p.id == updatedProject.id) updatedProject else p
+                        }
+                        _uiState.value = _uiState.value.copy(
+                            projects = updatedProjects,
+                            selectedProject = updatedProject
+                        )
+                    }
+                    .onFailure { error ->
+                        Log.e(TAG, "Failed to refresh project", error)
+                        _uiState.value = _uiState.value.copy(
+                            errorMessage = "Failed to refresh project data"
+                        )
+                    }
+            }
+        }
+    }
+
+    fun refreshAllProjects() {
+        Log.d(TAG, "Refreshing all projects for user")
+        loadUserProjects()
     }
 
     fun clearMessages() {

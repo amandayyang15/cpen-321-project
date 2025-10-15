@@ -78,8 +78,9 @@ export class ProjectController {
           name: project.name,
           description: project.description,
           invitationCode: project.invitationCode,
-          ownerId: project.ownerId,
+          ownerId: project.ownerId.toString(), // Convert to string
           members: project.members,
+          resources: project.resources || [], // Include resources
           createdAt: project.createdAt,
           updatedAt: project.updatedAt
         }
@@ -125,8 +126,9 @@ export class ProjectController {
           name: project.name,
           description: project.description,
           invitationCode: project.invitationCode,
-          ownerId: project.ownerId,
+          ownerId: project.ownerId.toString(), // Convert to string
           members: project.members,
+          resources: project.resources || [], // Include resources
           createdAt: project.createdAt,
           updatedAt: project.updatedAt,
           isOwner: project.ownerId.toString() === userId
@@ -164,6 +166,11 @@ export class ProjectController {
         return;
       }
 
+      logger.info(`Project retrieved: ${project._id}, resources count: ${project.resources?.length || 0}`);
+      if (project.resources && project.resources.length > 0) {
+        logger.info(`Resources: ${project.resources.map(r => r.resourceName)}`);
+      }
+
       res.status(200).json({
         message: 'Project retrieved successfully',
         data: {
@@ -171,8 +178,9 @@ export class ProjectController {
           name: project.name,
           description: project.description,
           invitationCode: project.invitationCode,
-          ownerId: project.ownerId,
+          ownerId: project.ownerId.toString(), // Convert to string
           members: project.members,
+          resources: project.resources || [],
           createdAt: project.createdAt,
           updatedAt: project.updatedAt,
           isOwner
@@ -236,8 +244,9 @@ export class ProjectController {
           name: updatedProject.name,
           description: updatedProject.description,
           invitationCode: updatedProject.invitationCode,
-          ownerId: updatedProject.ownerId,
+          ownerId: updatedProject.ownerId.toString(), // Convert to string
           members: updatedProject.members,
+          resources: updatedProject.resources || [], // Include resources
           createdAt: updatedProject.createdAt,
           updatedAt: updatedProject.updatedAt
         }
@@ -344,8 +353,9 @@ export class ProjectController {
           name: updatedProject.name,
           description: updatedProject.description,
           invitationCode: updatedProject.invitationCode,
-          ownerId: updatedProject.ownerId,
+          ownerId: updatedProject.ownerId.toString(), // Convert to string
           members: updatedProject.members,
+          resources: updatedProject.resources || [], // Include resources
           createdAt: updatedProject.createdAt,
           updatedAt: updatedProject.updatedAt,
           isOwner: false
@@ -353,6 +363,87 @@ export class ProjectController {
       });
     } catch (error) {
       logger.error('Error joining project:', error);
+      res.status(500).json({ message: 'Internal server error' });
+    }
+  }
+
+  async addResource(req: Request, res: Response): Promise<void> {
+    try {
+      const { projectId } = req.params;
+      const { resourceName, link } = req.body;
+      const userId = req.user?.id;
+
+      logger.info(`=== ADD RESOURCE REQUEST ===`);
+      logger.info(`projectId: ${projectId}`);
+      logger.info(`resourceName: "${resourceName}"`);
+      logger.info(`link: "${link}"`);
+      logger.info(`userId: ${userId}`);
+      logger.info(`Request body: ${JSON.stringify(req.body)}`);
+      logger.info(`Request params: ${JSON.stringify(req.params)}`);
+
+      if (!userId) {
+        logger.warn('User not authenticated for add resource request');
+        res.status(401).json({ message: 'User not authenticated' });
+        return;
+      }
+
+      if (!resourceName || resourceName.trim().length === 0) {
+        res.status(400).json({ message: 'Resource name is required' });
+        return;
+      }
+
+      if (!link || link.trim().length === 0) {
+        res.status(400).json({ message: 'Resource link is required' });
+        return;
+      }
+
+      const project = await projectModel.findById(new mongoose.Types.ObjectId(projectId));
+
+      if (!project) {
+        res.status(404).json({ message: 'Project not found' });
+        return;
+      }
+
+      // Check if user has access to this project
+      const isOwner = project.ownerId.toString() === userId;
+      const isMember = project.members.some(member => member.userId.toString() === userId);
+
+      if (!isOwner && !isMember) {
+        res.status(403).json({ message: 'Access denied to this project' });
+        return;
+      }
+
+      const resource = {
+        resourceName: resourceName.trim(),
+        link: link.trim()
+      };
+
+      const updatedProject = await projectModel.addResource(new mongoose.Types.ObjectId(projectId), resource);
+
+      if (!updatedProject) {
+        res.status(500).json({ message: 'Failed to add resource' });
+        return;
+      }
+
+      logger.info(`Resource added to project: ${projectId} by user: ${userId}`);
+      logger.info(`Updated project now has ${updatedProject.resources.length} resources: ${updatedProject.resources.map(r => r.resourceName)}`);
+
+      res.status(200).json({
+        message: 'Resource added successfully',
+        data: {
+          id: updatedProject._id,
+          name: updatedProject.name,
+          description: updatedProject.description,
+          invitationCode: updatedProject.invitationCode,
+          ownerId: updatedProject.ownerId.toString(), // Convert to string
+          members: updatedProject.members,
+          resources: updatedProject.resources,
+          createdAt: updatedProject.createdAt,
+          updatedAt: updatedProject.updatedAt
+        }
+      });
+    } catch (error) {
+      logger.error('Error adding resource:', error);
       res.status(500).json({ message: 'Internal server error' });
     }
   }

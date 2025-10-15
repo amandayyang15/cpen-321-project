@@ -1,6 +1,7 @@
 package com.cpen321.usermanagement.data.remote.api
 
 import com.cpen321.usermanagement.data.remote.dto.ApiResponse
+import com.cpen321.usermanagement.data.remote.dto.AddResourceRequest
 import com.cpen321.usermanagement.data.remote.dto.CreateProjectRequest
 import com.cpen321.usermanagement.data.remote.dto.JoinProjectRequest
 import com.cpen321.usermanagement.data.remote.dto.Project
@@ -34,4 +35,10 @@ interface ProjectInterface {
 
     @DELETE("projects/{projectId}")
     suspend fun deleteProject(@Path("projectId") projectId: String): Response<ApiResponse<Unit>>
+
+    @POST("projects/{projectId}/resources")
+    suspend fun addResource(
+        @Path("projectId") projectId: String,
+        @Body request: AddResourceRequest
+    ): Response<ApiResponse<Project>>
 }

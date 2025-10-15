@@ -6,6 +6,11 @@ export interface IProjectMember {
   joinedAt: Date;
 }
 
+export interface IResource {
+  resourceName: string;
+  link: string;
+}
+
 export interface IProject extends Document {
   _id: mongoose.Types.ObjectId;
   name: string;
@@ -13,6 +18,7 @@ export interface IProject extends Document {
   invitationCode: string;
   ownerId: mongoose.Types.ObjectId;
   members: IProjectMember[];
+  resources: IResource[];
   createdAt: Date;
   updatedAt: Date;
   isActive: boolean;
@@ -32,6 +38,21 @@ const projectMemberSchema = new Schema<IProjectMember>({
   joinedAt: {
     type: Date,
     default: Date.now,
+  },
+});
+
+const resourceSchema = new Schema<IResource>({
+  resourceName: {
+    type: String,
+    required: true,
+    trim: true,
+    maxlength: 200,
+  },
+  link: {
+    type: String,
+    required: true,
+    trim: true,
+    maxlength: 500,
   },
 });
 
@@ -63,6 +84,7 @@ const projectSchema = new Schema<IProject>(
       index: true,
     },
     members: [projectMemberSchema],
+    resources: [resourceSchema],
     isActive: {
       type: Boolean,
       default: true,
@@ -99,7 +121,7 @@ export class ProjectModel {
 
   async findById(projectId: mongoose.Types.ObjectId): Promise<IProject | null> {
     try {
-      return await this.project.findById(projectId).populate('ownerId', 'name email profilePicture');
+      return await this.project.findById(projectId);
     } catch (error) {
       console.error('Error finding project by ID:', error);
       throw new Error('Failed to find project');
@@ -159,6 +181,33 @@ export class ProjectModel {
     } catch (error) {
       console.error('Error removing member from project:', error);
       throw new Error('Failed to remove member from project');
+    }
+  }
+
+  async addResource(projectId: mongoose.Types.ObjectId, resource: IResource): Promise<IProject | null> {
+    try {
+      return await this.project.findByIdAndUpdate(
+        projectId,
+        { $push: { resources: resource } },
+        { new: true }
+      );
+    } catch (error) {
+      console.error('Error adding resource to project:', error);
+      throw new Error('Failed to add resource to project');
+    }
+  }
+
+  async removeResource(projectId: mongoose.Types.ObjectId, resourceIndex: number): Promise<IProject | null> {
+    try {
+      const project = await this.project.findById(projectId);
+      if (!project) return null;
+
+      // Remove resource at specific index
+      project.resources.splice(resourceIndex, 1);
+      return await project.save();
+    } catch (error) {
+      console.error('Error removing resource from project:', error);
+      throw new Error('Failed to remove resource from project');
     }
   }
 
