@@ -45,4 +45,10 @@ object NetworkModule {
     fun provideExpenseService(): ExpenseInterface {
         return RetrofitClient.expenseInterface
     }
+
+    @Provides
+    @Singleton
+    fun provideTaskService(): TaskInterface {
+        return RetrofitClient.taskInterface
+    }
 }

@@ -1,3 +1,9 @@
+import javax.inject.Inject
+import com.cpen321.usermanagement.data.remote.api.TaskInterface
+import com.cpen321.usermanagement.data.remote.dto.Task
+import com.cpen321.usermanagement.data.remote.dto.CreateTaskRequest
+import com.cpen321.usermanagement.data.repository.TaskRepository
+
 class TaskRepositoryImpl @Inject constructor(
     private val taskInterface: TaskInterface
 ) : TaskRepository {
@@ -14,6 +20,14 @@ class TaskRepositoryImpl @Inject constructor(
             return response.body()!!.data!!
         } else {
             throw Exception(response.body()?.error ?: "Failed to create task")
+        }
+    }
+    override suspend fun getProjectTasks(projectId: String): List<Task> {
+        val response = taskInterface.getProjectTasks(projectId)
+        if (response.isSuccessful && response.body()?.data != null) {
+            return response.body()!!.data!!
+        } else {
+            throw Exception(response.body()?.message ?: "Failed to fetch tasks")
         }
     }
 }

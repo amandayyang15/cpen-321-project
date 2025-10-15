@@ -1,6 +1,7 @@
 package com.cpen321.usermanagement.ui.screens
-
+import retrofit2.http.GET
 import Icon
+import com.cpen321.usermanagement.data.remote.dto.Task
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -86,7 +87,7 @@ private fun ProjectContent(
     modifier: Modifier = Modifier
 ) {
     val uiState by projectViewModel.uiState.collectAsState()
-    
+
     // Auto-select first project if none is selected
     LaunchedEffect(uiState.projects, uiState.selectedProject) {
         if (uiState.projects.isNotEmpty() && uiState.selectedProject == null) {
@@ -94,7 +95,7 @@ private fun ProjectContent(
             projectViewModel.selectProject(uiState.projects.first())
         }
     }
-    
+
     Scaffold(
         modifier = modifier,
         topBar = {
@@ -203,7 +204,7 @@ private fun ProjectBody(
     val context = LocalContext.current
     val uiState by projectViewModel.uiState.collectAsState()
     val currentProject = uiState.selectedProject
-    
+
     var progressExpanded by remember { mutableStateOf(false) }
     var selectedProgress by remember { mutableStateOf("In Progress") }
     var selectedTab by remember { mutableStateOf("Task") }
@@ -213,12 +214,12 @@ private fun ProjectBody(
     var taskProgress by remember { mutableStateOf("In Progress") }
     var deadline by remember { mutableStateOf("") }
     var taskProgressExpanded by remember { mutableStateOf(false) }
-    
+
     // Resource state
     var showAddResourceDialog by remember { mutableStateOf(false) }
     var resourceName by remember { mutableStateOf("") }
     var resourceLink by remember { mutableStateOf("") }
-    
+
     // Project Settings state
     var projectName by remember { mutableStateOf("") }
     var selectedUserToRemove by remember { mutableStateOf("") }
@@ -231,10 +232,10 @@ private fun ProjectBody(
     var expenseAmount by remember { mutableStateOf("") }
     var paidByExpanded by remember { mutableStateOf(false) }
     var selectedUsersForSplit by remember { mutableStateOf(setOf<String>()) }
-    
+
     // Get actual project members
     val projectMembers = currentProject?.members ?: emptyList()
-    val ownerMember = currentProject?.let { 
+    val ownerMember = currentProject?.let {
         ProjectMember(userId = it.ownerId, role = "owner", joinedAt = it.createdAt)
     }
     // Only add owner if they're not already in projectMembers (avoid duplicates)
@@ -243,10 +244,10 @@ private fun ProjectBody(
     } else {
         projectMembers
     }
-    
+
     // Get expenses from ViewModel
     val expenses = uiState.expenses
-    
+
     // Load expenses when switching to Expense tab or when project changes
     LaunchedEffect(selectedTab, currentProject?.id) {
         if (selectedTab == "Expense" && currentProject != null) {
@@ -269,7 +270,7 @@ private fun ProjectBody(
             horizontalArrangement = Arrangement.spacedBy(spacing.small)
         ) {
             Button(
-                onClick = { 
+                onClick = {
                     Log.d("ProjectView", "Clicked Project Settings")
                     selectedTab = "Project Settings"
                 },
@@ -277,9 +278,9 @@ private fun ProjectBody(
             ) {
                 Text("Project Settings")
             }
-            
+
             Button(
-                onClick = { 
+                onClick = {
                     Log.d("ProjectView", "Clicked Create Task")
                     showCreateTaskDialog = true
                 },
@@ -288,13 +289,13 @@ private fun ProjectBody(
                 Text("Create Task")
             }
         }
-        
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(spacing.small)
         ) {
             Button(
-                onClick = { 
+                onClick = {
                     Log.d("ProjectView", "Clicked Resource")
                     selectedTab = "Resource"
                     // Refresh project data to get latest resources
@@ -304,9 +305,9 @@ private fun ProjectBody(
             ) {
                 Text("Resource")
             }
-            
+
             Button(
-                onClick = { 
+                onClick = {
                     Log.d("ProjectView", "Clicked Chat")
                     selectedTab = "Chat"
                 },
@@ -315,13 +316,13 @@ private fun ProjectBody(
                 Text("Chat")
             }
         }
-        
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(spacing.small)
         ) {
             Button(
-                onClick = { 
+                onClick = {
                     Log.d("ProjectView", "Clicked Expense")
                     selectedTab = "Expense"
                 },
@@ -329,9 +330,9 @@ private fun ProjectBody(
             ) {
                 Text("Expense")
             }
-            
+
             Button(
-                onClick = { 
+                onClick = {
                     Log.d("ProjectView", "Clicked Task Board")
                     selectedTab = "Task"
                 },
@@ -340,7 +341,7 @@ private fun ProjectBody(
                 Text("Task Board")
             }
         }
-        
+
         // Add Expense Button (only show when on Expense tab)
         if (selectedTab == "Expense") {
             Row(
@@ -348,7 +349,7 @@ private fun ProjectBody(
                 horizontalArrangement = Arrangement.Center
             ) {
                 Button(
-                    onClick = { 
+                    onClick = {
                         Log.d("ProjectView", "Clicked Add Expense")
                         showCreateExpenseDialog = true
                     }
@@ -357,7 +358,7 @@ private fun ProjectBody(
                 }
             }
         }
-        
+
         // Add Resource Button (only show when on Resource tab)
         if (selectedTab == "Resource") {
             Row(
@@ -365,7 +366,7 @@ private fun ProjectBody(
                 horizontalArrangement = Arrangement.Center
             ) {
                 Button(
-                    onClick = { 
+                    onClick = {
                         Log.d("ProjectView", "Clicked Add Resource")
                         showAddResourceDialog = true
                     }
@@ -374,7 +375,33 @@ private fun ProjectBody(
                 }
             }
         }
-        
+
+        val tasks by projectViewModel.tasks.collectAsState()
+
+        if (selectedTab == "Task") {
+            Column {
+                Text("Task Board", style = MaterialTheme.typography.titleLarge)
+                if (tasks.isEmpty()) {
+                    Text("No tasks yet.")
+                } else {
+                    tasks.forEach { task ->
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(8.dp)) {
+                                Text("Name: ${task.title}", fontWeight = FontWeight.Bold)
+                                Text("Status: ${task.status}")
+                                Text("Assignees: ${task.assignees.joinToString()}")
+                                Text("Deadline: ${task.deadline ?: "None"}")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // Content area below the buttons
         Column(
             modifier = Modifier
@@ -390,7 +417,7 @@ private fun ProjectBody(
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.padding(bottom = spacing.medium)
                     )
-                    
+
                     // Table header
                     Row(
                         modifier = Modifier
@@ -445,7 +472,7 @@ private fun ProjectBody(
                             textAlign = TextAlign.Center
                         )
                     }
-                    
+
                     // Table row
                     Row(
                         modifier = Modifier
@@ -489,7 +516,7 @@ private fun ProjectBody(
                         "Blocked" -> Color(0xFFF44336) // Red
                         else -> MaterialTheme.colorScheme.surfaceVariant
                     }
-                    
+
                     val textColor = when (selectedProgress) {
                         "In Progress" -> Color.Black
                         "Done" -> Color.White
@@ -497,7 +524,7 @@ private fun ProjectBody(
                         "Blocked" -> Color.White
                         else -> MaterialTheme.colorScheme.onSurfaceVariant
                     }
-                            
+
                             TextButton(
                                 onClick = { progressExpanded = !progressExpanded },
                                 modifier = Modifier
@@ -550,7 +577,7 @@ private fun ProjectBody(
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.padding(bottom = spacing.medium)
                     )
-                    
+
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -585,7 +612,7 @@ private fun ProjectBody(
                                 )
                             }
                         }
-                        
+
                         // Delete Project card
                         Box(
                             modifier = Modifier
@@ -617,7 +644,7 @@ private fun ProjectBody(
                                 }
                             }
                         }
-                        
+
                         // Rename Project card
                         Box(
                             modifier = Modifier
@@ -651,7 +678,7 @@ private fun ProjectBody(
                                         )
                                     )
                                     Button(
-                                        onClick = { 
+                                        onClick = {
                                             Log.d("ProjectView", "Rename project to: $projectName")
                                             Toast.makeText(context, "Project renamed to: $projectName", Toast.LENGTH_SHORT).show()
                                         }
@@ -661,7 +688,7 @@ private fun ProjectBody(
                                 }
                             }
                         }
-                        
+
                         // Remove Users card
                         Box(
                             modifier = Modifier
@@ -711,7 +738,7 @@ private fun ProjectBody(
                                         }
                                     }
                                     Button(
-                                        onClick = { 
+                                        onClick = {
                                             Log.d("ProjectView", "Remove user: $selectedUserToRemove")
                                             Toast.makeText(context, "Removed user: $selectedUserToRemove", Toast.LENGTH_SHORT).show()
                                         }
@@ -736,7 +763,7 @@ private fun ProjectBody(
                             color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.padding(bottom = spacing.medium)
                         )
-                        
+
                         // Show refresh button
                         if (uiState.isLoading) {
                             CircularProgressIndicator(
@@ -745,7 +772,7 @@ private fun ProjectBody(
                             )
                         } else {
                             TextButton(
-                                onClick = { 
+                                onClick = {
                                     Log.d("ProjectView", "Manual refresh clicked")
                                     projectViewModel.refreshSelectedProject()
                                 }
@@ -754,7 +781,7 @@ private fun ProjectBody(
                             }
                         }
                     }
-                    
+
                     // Show success message if available
                     if (uiState.message?.contains("Resource added") == true) {
                         Text(
@@ -766,7 +793,7 @@ private fun ProjectBody(
                                 .padding(bottom = spacing.small)
                         )
                     }
-                    
+
                     if (currentProject?.resources?.isNotEmpty() == true) {
                         Column(
                             modifier = Modifier.fillMaxWidth(),
@@ -806,7 +833,7 @@ private fun ProjectBody(
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.padding(bottom = spacing.medium)
                     )
-                    
+
                     if (expenses.isEmpty()) {
                         Text(
                             text = "No expenses added yet",
@@ -833,7 +860,7 @@ private fun ProjectBody(
                 }
             }
         }
-        
+
         // Create Task Dialog
         if (showCreateTaskDialog) {
             AlertDialog(
@@ -857,7 +884,7 @@ private fun ProjectBody(
                             label = { Text("Assignee") },
                             modifier = Modifier.fillMaxWidth()
                         )
-                        
+
                         // Progress Dropdown
                         Box {
                             TextButton(
@@ -885,7 +912,7 @@ private fun ProjectBody(
                                 }
                             }
                         }
-                        
+
                         OutlinedTextField(
                             value = deadline,
                             onValueChange = { deadline = it },
@@ -911,7 +938,7 @@ private fun ProjectBody(
                 },
                 dismissButton = {
                     TextButton(
-                        onClick = { 
+                        onClick = {
                             showCreateTaskDialog = false
                             taskName = ""
                             assignee = ""
@@ -924,7 +951,7 @@ private fun ProjectBody(
                 }
             )
         }
-        
+
         // Create Expense Dialog
         if (showCreateExpenseDialog) {
             AlertDialog(
@@ -943,7 +970,7 @@ private fun ProjectBody(
                             modifier = Modifier.fillMaxWidth(),
                             placeholder = { Text("e.g., Team Lunch") }
                         )
-                        
+
                         OutlinedTextField(
                             value = expenseDescription,
                             onValueChange = { expenseDescription = it },
@@ -951,7 +978,7 @@ private fun ProjectBody(
                             modifier = Modifier.fillMaxWidth(),
                             placeholder = { Text("e.g., Lunch at restaurant") }
                         )
-                        
+
                         OutlinedTextField(
                             value = expenseAmount,
                             onValueChange = { expenseAmount = it },
@@ -959,14 +986,14 @@ private fun ProjectBody(
                             modifier = Modifier.fillMaxWidth(),
                             placeholder = { Text("0.00") }
                         )
-                        
+
                         // Split Between Multi-select
                         Text(
                             text = "Split between (select users):",
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Medium
                         )
-                        
+
                         if (allMembers.isEmpty()) {
                             Text(
                                 text = "No members in this project",
@@ -998,10 +1025,10 @@ private fun ProjectBody(
                                 }
                             }
                         }
-                        
+
                         if (selectedUsersForSplit.isNotEmpty()) {
                             val amount = expenseAmount.toDoubleOrNull() ?: 0.0
-                            val amountPerPerson = if (selectedUsersForSplit.isNotEmpty()) 
+                            val amountPerPerson = if (selectedUsersForSplit.isNotEmpty())
                                 amount / selectedUsersForSplit.size else 0.0
                             Text(
                                 text = "${selectedUsersForSplit.size} users selected • $${String.format("%.2f", amountPerPerson)} each",
@@ -1023,12 +1050,12 @@ private fun ProjectBody(
                             Log.d("ProjectView", "Selected users: $selectedUsersForSplit")
                             Log.d("ProjectView", "Current project: ${currentProject?.id}")
                             Log.d("ProjectView", "All members: ${allMembers.map { it.userId }}")
-                            
-                            if (expenseTitle.isNotBlank() && 
-                                amount != null && amount > 0 && 
+
+                            if (expenseTitle.isNotBlank() &&
+                                amount != null && amount > 0 &&
                                 selectedUsersForSplit.isNotEmpty() &&
                                 currentProject != null) {
-                                
+
                                 Log.d("ProjectView", "Validation passed - calling createExpense")
                                 projectViewModel.createExpense(
                                     projectId = currentProject.id,
@@ -1037,10 +1064,10 @@ private fun ProjectBody(
                                     amount = amount,
                                     splitUserIds = selectedUsersForSplit.toList()
                                 )
-                                
+
                                 Log.d("ProjectView", "Expense creation call completed")
                                 Toast.makeText(context, "Expense added: $expenseTitle", Toast.LENGTH_SHORT).show()
-                                
+
                                 // Reset form
                                 showCreateExpenseDialog = false
                                 expenseTitle = ""
@@ -1062,7 +1089,7 @@ private fun ProjectBody(
                 },
                 dismissButton = {
                     TextButton(
-                        onClick = { 
+                        onClick = {
                             showCreateExpenseDialog = false
                             expenseTitle = ""
                             expenseDescription = ""
@@ -1075,11 +1102,11 @@ private fun ProjectBody(
                 }
             )
         }
-        
+
         // Add Resource Dialog
         if (showAddResourceDialog) {
             AddResourceDialog(
-                onDismiss = { 
+                onDismiss = {
                     showAddResourceDialog = false
                     resourceName = ""
                     resourceLink = ""
@@ -1118,7 +1145,7 @@ private fun ResourceItem(
 ) {
     val spacing = LocalSpacing.current
     val context = LocalContext.current
-    
+
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -1197,7 +1224,7 @@ private fun AddResourceDialog(
                         { Text("Resource link is required") }
                     } else null
                 )
-                
+
                 // Display error message if present
                 if (errorMessage != null) {
                     Spacer(modifier = Modifier.height(8.dp))
@@ -1249,7 +1276,7 @@ private fun ExpenseCard(
 ) {
     val spacing = LocalSpacing.current
     val context = LocalContext.current
-    
+
     Card(
         modifier = modifier,
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -1297,27 +1324,27 @@ private fun ExpenseCard(
                     )
                 }
             }
-            
+
             Spacer(modifier = Modifier.height(spacing.small))
-            
+
             // Created by info
             Text(
                 text = "Created by ${expense.createdBy.name}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
             )
-            
+
             Spacer(modifier = Modifier.height(spacing.medium))
-            
+
             // Splits
             Text(
                 text = "Split Details:",
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Medium
             )
-            
+
             Spacer(modifier = Modifier.height(spacing.small))
-            
+
             expense.splits.forEach { split ->
                 Row(
                     modifier = Modifier
@@ -1353,9 +1380,9 @@ private fun ExpenseCard(
                         text = "$${String.format("%.2f", split.amount)}",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium,
-                        color = if (split.isPaid) 
-                            MaterialTheme.colorScheme.tertiary 
-                        else 
+                        color = if (split.isPaid)
+                            MaterialTheme.colorScheme.tertiary
+                        else
                             MaterialTheme.colorScheme.error
                     )
                 }

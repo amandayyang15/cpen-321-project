@@ -7,6 +7,7 @@ import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.POST
 import retrofit2.http.Path
+import retrofit2.http.GET
 
 interface TaskInterface {
     @POST("projects/{projectId}/tasks")
@@ -14,4 +15,8 @@ interface TaskInterface {
         @Path("projectId") projectId: String,
         @Body request: CreateTaskRequest
     ): Response<ApiResponse<Task>>
+    @GET("projects/{projectId}/tasks")
+    suspend fun getProjectTasks(
+        @Path("projectId") projectId: String
+    ): Response<ApiResponse<List<Task>>>
 }

@@ -13,6 +13,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import com.cpen321.usermanagement.data.remote.dto.Task
+import com.cpen321.usermanagement.data.repository.TaskRepository
+
 
 data class ProjectUiState(
     // Loading states
@@ -34,7 +37,8 @@ data class ProjectUiState(
 @HiltViewModel
 class ProjectViewModel @Inject constructor(
     private val projectRepository: ProjectRepository,
-    private val expenseRepository: ExpenseRepository
+    private val expenseRepository: ExpenseRepository,
+    private val taskRepository: TaskRepository
 ) : ViewModel() {
 
     companion object {
@@ -43,7 +47,7 @@ class ProjectViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(ProjectUiState())
     val uiState: StateFlow<ProjectUiState> = _uiState.asStateFlow()
-    
+
     private var isCreatingProject = false
     private var isJoiningProject = false
 
@@ -51,11 +55,24 @@ class ProjectViewModel @Inject constructor(
         loadUserProjects()
     }
 
+    private val _tasks = MutableStateFlow<List<Task>>(emptyList())
+    val tasks: StateFlow<List<Task>> = _tasks
+
+    fun loadProjectTasks(projectId: String) {
+        viewModelScope.launch {
+            try {
+                val fetchedTasks = taskRepository.getProjectTasks(projectId)
+                _tasks.value = fetchedTasks
+            } catch (e: Exception) {
+                // handle error
+            }
+        }
+    }
     fun loadUserProjects() {
         Log.d(TAG, "Loading user projects...")
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
-            
+
             projectRepository.getUserProjects()
                 .onSuccess { projects ->
                     Log.d(TAG, "Successfully loaded ${projects.size} projects: ${projects.map { it.name }}")
@@ -93,7 +110,7 @@ class ProjectViewModel @Inject constructor(
         isCreatingProject = true
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isCreating = true, errorMessage = null)
-            
+
             projectRepository.createProject(name.trim(), description?.trim())
                 .onSuccess { project ->
                     Log.d(TAG, "Project created successfully: ${project.id}")
@@ -101,7 +118,7 @@ class ProjectViewModel @Inject constructor(
                     val currentProjects = _uiState.value.projects
                     val updatedProjects = listOf(project) + currentProjects
                     Log.d(TAG, "Updated projects list: ${updatedProjects.map { it.name }}")
-                    
+
                     // Force state update with explicit copy
                     val newState = _uiState.value.copy(
                         isCreating = false,
@@ -110,7 +127,7 @@ class ProjectViewModel @Inject constructor(
                     )
                     _uiState.value = newState
                     isCreatingProject = false
-                    
+
                     Log.d(TAG, "State updated - projects count: ${_uiState.value.projects.size}")
                 }
                 .onFailure { error ->
@@ -142,7 +159,7 @@ class ProjectViewModel @Inject constructor(
         isJoiningProject = true
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isCreating = true, errorMessage = null)
-            
+
             projectRepository.joinProject(invitationCode.trim())
                 .onSuccess { project ->
                     Log.d(TAG, "Successfully joined project: ${project.id}")
@@ -150,7 +167,7 @@ class ProjectViewModel @Inject constructor(
                     val currentProjects = _uiState.value.projects
                     val updatedProjects = listOf(project) + currentProjects
                     Log.d(TAG, "Updated projects list: ${updatedProjects.map { it.name }}")
-                    
+
                     // Force state update with explicit copy
                     val newState = _uiState.value.copy(
                         isCreating = false,
@@ -159,7 +176,7 @@ class ProjectViewModel @Inject constructor(
                     )
                     _uiState.value = newState
                     isJoiningProject = false
-                    
+
                     Log.d(TAG, "State updated - projects count: ${_uiState.value.projects.size}")
                 }
                 .onFailure { error ->
@@ -176,7 +193,7 @@ class ProjectViewModel @Inject constructor(
     fun updateProject(projectId: String, name: String? = null, description: String? = null) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isUpdating = true, errorMessage = null)
-            
+
             projectRepository.updateProject(projectId, name, description)
                 .onSuccess { updatedProject ->
                     Log.d(TAG, "Project updated: ${updatedProject.id}")
@@ -203,7 +220,7 @@ class ProjectViewModel @Inject constructor(
     fun deleteProject(projectId: String) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isDeleting = true, errorMessage = null)
-            
+
             projectRepository.deleteProject(projectId)
                 .onSuccess {
                     Log.d(TAG, "Project deleted: $projectId")
@@ -238,7 +255,7 @@ class ProjectViewModel @Inject constructor(
         Log.d(TAG, "Loading expenses for project: $projectId")
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
-            
+
             expenseRepository.getProjectExpenses(projectId)
                 .onSuccess { expenses ->
                     Log.d(TAG, "Successfully loaded ${expenses.size} expenses")
@@ -288,7 +305,7 @@ class ProjectViewModel @Inject constructor(
         Log.d(TAG, "Creating expense: $title for project: $projectId")
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isCreating = true, errorMessage = null)
-            
+
             expenseRepository.createExpense(projectId, title.trim(), description?.trim(), amount, splitUserIds)
                 .onSuccess { expense ->
                     Log.d(TAG, "Expense created successfully: ${expense.id}")
@@ -314,7 +331,7 @@ class ProjectViewModel @Inject constructor(
         Log.d(TAG, "Marking split as ${if (isPaid) "paid" else "unpaid"} for expense: $expenseId, user: $userId")
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isUpdating = true, errorMessage = null)
-            
+
             expenseRepository.markSplitPaid(projectId, expenseId, userId, isPaid)
                 .onSuccess { updatedExpense ->
                     Log.d(TAG, "Split status updated successfully")
@@ -342,7 +359,7 @@ class ProjectViewModel @Inject constructor(
         Log.d(TAG, "Deleting expense: $expenseId")
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isDeleting = true, errorMessage = null)
-            
+
             expenseRepository.deleteExpense(projectId, expenseId)
                 .onSuccess {
                     Log.d(TAG, "Expense deleted successfully")
@@ -365,7 +382,7 @@ class ProjectViewModel @Inject constructor(
 
     fun addResource(projectId: String, resourceName: String, link: String) {
         Log.d(TAG, "addResource called with projectId: $projectId, resourceName: '$resourceName', link: '$link'")
-        
+
         if (resourceName.isBlank()) {
             Log.d(TAG, "Resource name is blank, showing error")
             _uiState.value = _uiState.value.copy(
@@ -384,7 +401,7 @@ class ProjectViewModel @Inject constructor(
 
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isCreating = true, errorMessage = null)
-            
+
             projectRepository.addResource(projectId, resourceName.trim(), link.trim())
                 .onSuccess { project ->
                     Log.d(TAG, "Resource added successfully to project: ${project.id}")

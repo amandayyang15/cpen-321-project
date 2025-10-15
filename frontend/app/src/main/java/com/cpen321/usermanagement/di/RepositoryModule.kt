@@ -11,6 +11,8 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
+import com.cpen321.usermanagement.data.repository.TaskRepository
+import com.cpen321.usermanagement.data.repository.TaskRepositoryImpl
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -39,4 +41,12 @@ object RepositoryModule {
     ): ExpenseRepository {
         return expenseRepositoryImpl
     }
+
+    @Provides
+    @Singleton
+    fun provideTaskRepository(
+        taskRepositoryImpl: TaskRepositoryImpl
+    ): TaskRepository {
+        return taskRepositoryImpl
+}
 }
