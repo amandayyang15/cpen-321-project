@@ -208,37 +208,6 @@ class ProjectRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun joinProject(invitationCode: String): Result<Project> {
-        val joinProjectReq = JoinProjectRequest(invitationCode)
-        return try {
-            val response = projectInterface.joinProject(joinProjectReq)
-            if (response.isSuccessful && response.body()?.data != null) {
-                val project = response.body()!!.data!!
-                Log.d(TAG, "Successfully joined project: ${project.id}")
-                Result.success(project)
-            } else {
-                val errorBodyString = response.errorBody()?.string()
-                val errorMessage = JsonUtils.parseErrorMessage(
-                    errorBodyString,
-                    response.body()?.message ?: "Failed to join project."
-                )
-                Log.e(TAG, "Project join failed: $errorMessage")
-                Result.failure(Exception(errorMessage))
-            }
-        } catch (e: java.net.SocketTimeoutException) {
-            Log.e(TAG, "Network timeout during project join", e)
-            Result.failure(e)
-        } catch (e: java.net.UnknownHostException) {
-            Log.e(TAG, "Network connection failed during project join", e)
-            Result.failure(e)
-        } catch (e: java.io.IOException) {
-            Log.e(TAG, "IO error during project join", e)
-            Result.failure(e)
-        } catch (e: retrofit2.HttpException) {
-            Log.e(TAG, "HTTP error during project join: ${e.code()}", e)
-            Result.failure(e)
-        }
-    }
 
     override suspend fun addResource(projectId: String, resourceName: String, link: String): Result<Project> {
         val addResourceReq = AddResourceRequest(resourceName, link)
