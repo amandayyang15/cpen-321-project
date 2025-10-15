@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import { expenseModel } from './expense.model';
-import { projectModel } from './project.model';
+import { projectModel } from '../projects/project.model';
 
 export class ExpenseController {
   // Create a new expense for a project
@@ -56,9 +56,9 @@ export class ExpenseController {
       const invalidUsers = splitUserIds.filter((id: string) => !projectMemberIds.includes(id));
       if (invalidUsers.length > 0) {
         console.log('ERROR: Invalid users not in project:', invalidUsers);
-        res.status(400).json({ 
-          success: false, 
-          message: 'Some users are not members of this project' 
+        res.status(400).json({
+          success: false,
+          message: 'Some users are not members of this project'
         });
         return;
       }
@@ -248,10 +248,10 @@ export class ExpenseController {
       console.log('✅ EXPENSE SPLIT UPDATED:');
       console.log('  Expense ID:', finalExpense?._id.toString());
       console.log('  Status:', finalExpense?.status);
-      console.log('  All splits:', finalExpense?.splits.map(s => ({ 
-        userId: s.userId.toString(), 
-        amount: s.amount, 
-        isPaid: s.isPaid 
+      console.log('  All splits:', finalExpense?.splits.map(s => ({
+        userId: s.userId.toString(),
+        amount: s.amount,
+        isPaid: s.isPaid
       })));
 
       res.status(200).json({
@@ -319,9 +319,9 @@ export class ExpenseController {
 
       if (!isCreator && !isOwner) {
         console.log('ERROR: User is neither creator nor owner');
-        res.status(403).json({ 
-          success: false, 
-          message: 'Only the expense creator or project owner can delete this expense' 
+        res.status(403).json({
+          success: false,
+          message: 'Only the expense creator or project owner can delete this expense'
         });
         return;
       }

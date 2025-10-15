@@ -1,7 +1,7 @@
 import { NextFunction, Request, RequestHandler, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
-import { userModel } from './user.model';
+import { userModel } from '../features/users/user.model';
 
 export const authenticateToken: RequestHandler = async (
   req: Request,
@@ -42,7 +42,7 @@ export const authenticateToken: RequestHandler = async (
       return;
     }
 
-    req.user = user;
+    (req as any).user = user;
 
     next();
   } catch (error) {

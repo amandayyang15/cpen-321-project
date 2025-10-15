@@ -2,9 +2,9 @@ import { OAuth2Client } from 'google-auth-library';
 import jwt from 'jsonwebtoken';
 
 import type { AuthResult } from './auth.types';
-import type { GoogleUserInfo, IUser } from './user.types';
-import logger from './logger.util';
-import { userModel } from './user.model';
+import type { GoogleUserInfo, IUser } from '../users/user.types';
+import logger from '../../utils/logger.util';
+import { userModel } from '../users/user.model';
 
 export class AuthService {
   private googleClient: OAuth2Client;

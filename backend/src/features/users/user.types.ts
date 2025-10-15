@@ -1,6 +1,6 @@
 import mongoose, { Document } from 'mongoose';
 import z from 'zod';
-import { HOBBIES } from './hobbies';
+import { HOBBIES } from '../hobbies/hobbies';
 
 // User model
 // ------------------------------------------------------------
@@ -14,11 +14,11 @@ export interface IUser extends Document {
   hobbies: string[];
   createdAt: Date;
   updatedAt: Date;
-  
+
   // Project relationships (new fields for project management)
   ownedProjects: mongoose.Types.ObjectId[];
   memberProjects: mongoose.Types.ObjectId[];
-  
+
   // Google Calendar integration (for future use)
   calendarRefreshToken?: string;
   calendarEnabled: boolean;

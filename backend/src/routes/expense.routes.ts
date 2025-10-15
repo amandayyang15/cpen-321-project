@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { ExpenseController } from './expense.controller';
-import { validateBody } from './validation.middleware';
+import { ExpenseController } from '../features/expenses/expense.controller';
+import { validateBody } from '../middleware/validation.middleware';
 import { z } from 'zod';
 
 const router = Router({ mergeParams: true }); // Add mergeParams to access parent router params

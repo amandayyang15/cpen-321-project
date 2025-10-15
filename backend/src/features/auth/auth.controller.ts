@@ -5,7 +5,7 @@ import {
   AuthenticateUserRequest,
   AuthenticateUserResponse,
 } from './auth.types';
-import logger from './logger.util';
+import logger from '../../utils/logger.util';
 
 export class AuthController {
   async signUp(

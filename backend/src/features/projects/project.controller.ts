@@ -1,8 +1,8 @@
 import { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import { projectModel } from './project.model';
-import { userModel } from './user.model';
-import logger from './logger.util';
+import { userModel } from '../users/user.model';
+import logger from '../../utils/logger.util';
 
 export class ProjectController {
   async createProject(req: Request, res: Response): Promise<void> {
@@ -102,7 +102,7 @@ export class ProjectController {
 
       // Get projects where user is owner
       const ownedProjects = await projectModel.findByOwnerId(userId);
-      
+
       // Get projects where user is a member
       const memberProjects = await projectModel.findByMemberId(userId);
 
