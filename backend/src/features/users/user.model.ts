@@ -1,14 +1,14 @@
 import mongoose, { Schema } from 'mongoose';
 import { z } from 'zod';
 
-import { HOBBIES } from './hobbies';
+import { HOBBIES } from '../hobbies/hobbies';
 import {
   createUserSchema,
   GoogleUserInfo,
   IUser,
   updateProfileSchema,
 } from './user.types';
-import logger from './logger.util';
+import logger from '../../utils/logger.util';
 
 const userSchema = new Schema<IUser>(
   {
@@ -219,7 +219,7 @@ export class UserModel {
     try {
       const user = await this.user.findById(userId).select('ownedProjects memberProjects');
       if (!user) return null;
-      
+
       return {
         ownedProjects: user.ownedProjects,
         memberProjects: user.memberProjects

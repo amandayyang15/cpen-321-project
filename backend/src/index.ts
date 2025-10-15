@@ -4,9 +4,9 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 import express from 'express';
-import { connectDB } from './database';
-import { errorHandler, notFoundHandler } from './errorHandler.middleware';
-import router from './routes';
+import { connectDB } from './database/database';
+import { errorHandler, notFoundHandler } from './middleware/errorHandler.middleware';
+import router from './routes/routes';
 import path from 'path';
 
 const app = express();

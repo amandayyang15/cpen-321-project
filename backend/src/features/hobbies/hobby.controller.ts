@@ -1,7 +1,7 @@
 import { NextFunction, Request, Response } from 'express';
 
 import { HOBBIES } from './hobbies';
-import logger from './logger.util';
+import logger from '../../utils/logger.util';
 import { GetAllHobbiesResponse } from './hobby.types';
 
 export class HobbyController {

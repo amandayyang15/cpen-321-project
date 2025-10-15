@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { ProjectController } from './project.controller';
-import { validateBody } from './validation.middleware';
+import { ProjectController } from '../features/projects/project.controller';
+import { validateBody } from '../middleware/validation.middleware';
 import { z } from 'zod';
 import expenseRoutes from './expense.routes';
 
