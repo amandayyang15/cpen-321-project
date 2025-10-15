@@ -48,6 +48,7 @@ fun HomePage(
     val spacing = LocalSpacing.current
     val uiState by projectViewModel.uiState.collectAsState()
     var showCreateDialog by remember { mutableStateOf(false) }
+    var showJoinDialog by remember { mutableStateOf(false) }
     var refreshTrigger by remember { mutableStateOf(0) }
 
     // Debug logging for state changes
@@ -100,7 +101,7 @@ fun HomePage(
             Button(
                 onClick = { 
                     Log.d("HomePage", "Join Existing Project")
-                    // TODO: Implement join project functionality
+                    showJoinDialog = true
                 },
                 modifier = Modifier
                     .weight(1f)
@@ -182,6 +183,34 @@ fun HomePage(
                 refreshTrigger++ // Trigger recomposition
             }
         )
+    }
+
+    // Join Project Dialog
+    if (showJoinDialog) {
+        JoinProjectDialog(
+            onDismiss = { 
+                showJoinDialog = false
+                projectViewModel.clearMessages() // Clear any error messages when dismissing
+            },
+            onJoinProject = { code ->
+                Log.d("HomePage", "Joining project with code: $code")
+                projectViewModel.joinProject(code)
+                // Don't close dialog immediately - let user see success/error message
+            },
+            errorMessage = uiState.errorMessage,
+            isJoining = uiState.isCreating
+        )
+    }
+
+    // Close join dialog on successful join
+    LaunchedEffect(uiState.message) {
+        if (uiState.message == "Successfully joined project") {
+            showJoinDialog = false
+            projectViewModel.clearMessages()
+            // Force refresh projects after successful join
+            projectViewModel.loadUserProjects()
+            refreshTrigger++ // Trigger recomposition
+        }
     }
 }
 
@@ -308,6 +337,80 @@ private fun CreateProjectDialog(
             TextButton(
                 onClick = onDismiss,
                 enabled = !isCreating
+            ) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+@Composable
+private fun JoinProjectDialog(
+    onDismiss: () -> Unit,
+    onJoinProject: (String) -> Unit,
+    errorMessage: String?,
+    isJoining: Boolean,
+    modifier: Modifier = Modifier
+) {
+    var projectCode by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = { if (!isJoining) onDismiss() },
+        title = {
+            Text("Join Existing Project")
+        },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = projectCode,
+                    onValueChange = { 
+                        if (it.length <= 8) {
+                            projectCode = it
+                        }
+                    },
+                    label = { Text("Project Code") },
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text("Enter project invitation code") },
+                    maxLines = 1,
+                    singleLine = true,
+                    enabled = !isJoining
+                )
+                
+                // Display error message if present
+                if (errorMessage != null) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = errorMessage,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (projectCode.isNotBlank() && !isJoining) {
+                        Log.d("HomePage", "Dialog: Joining project with code: $projectCode")
+                        onJoinProject(projectCode)
+                    }
+                },
+                enabled = projectCode.isNotBlank() && !isJoining
+            ) {
+                if (isJoining) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Text("Join")
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                enabled = !isJoining
             ) {
                 Text("Cancel")
             }
