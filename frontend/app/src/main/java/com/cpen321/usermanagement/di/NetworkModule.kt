@@ -1,7 +1,6 @@
 package com.cpen321.usermanagement.di
 
 import com.cpen321.usermanagement.data.remote.api.AuthInterface
-import com.cpen321.usermanagement.data.remote.api.ExpenseInterface
 import com.cpen321.usermanagement.data.remote.api.HobbyInterface
 import com.cpen321.usermanagement.data.remote.api.ImageInterface
 import com.cpen321.usermanagement.data.remote.api.RetrofitClient
@@ -38,11 +37,5 @@ object NetworkModule {
     @Singleton
     fun provideHobbyService(): HobbyInterface {
         return RetrofitClient.hobbyInterface
-    }
-
-    @Provides
-    @Singleton
-    fun provideExpenseService(): ExpenseInterface {
-        return RetrofitClient.expenseInterface
     }
 }

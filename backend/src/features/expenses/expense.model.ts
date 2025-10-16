@@ -185,9 +185,7 @@ export class ExpenseModel {
         expenseId,
         { $push: { splits: splitData } },
         { new: true }
-      )
-        .populate('createdBy', 'name email profilePicture')
-        .populate('splits.userId', 'name email profilePicture');
+      ).populate('splits.userId', 'name email profilePicture');
     } catch (error) {
       console.error('Error adding split to expense:', error);
       throw new Error('Failed to add split to expense');
@@ -200,9 +198,7 @@ export class ExpenseModel {
         { _id: expenseId, 'splits.userId': userId },
         { $set: { 'splits.$.isPaid': isPaid } },
         { new: true }
-      )
-        .populate('createdBy', 'name email profilePicture')
-        .populate('splits.userId', 'name email profilePicture');
+      ).populate('splits.userId', 'name email profilePicture');
     } catch (error) {
       console.error('Error updating expense split:', error);
       throw new Error('Failed to update expense split');
@@ -239,9 +235,7 @@ export class ExpenseModel {
         expenseId,
         { status },
         { new: true }
-      )
-        .populate('createdBy', 'name email profilePicture')
-        .populate('splits.userId', 'name email profilePicture');
+      ).populate('splits.userId', 'name email profilePicture');
     } catch (error) {
       console.error('Error updating expense status:', error);
       throw new Error('Failed to update expense status');

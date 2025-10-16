@@ -3,9 +3,7 @@ package com.cpen321.usermanagement.ui.viewmodels
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.cpen321.usermanagement.data.remote.dto.Expense
 import com.cpen321.usermanagement.data.remote.dto.Project
-import com.cpen321.usermanagement.data.repository.ExpenseRepository
 import com.cpen321.usermanagement.data.repository.ProjectRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,7 +22,6 @@ data class ProjectUiState(
     // Data states
     val projects: List<Project> = emptyList(),
     val selectedProject: Project? = null,
-    val expenses: List<Expense> = emptyList(),
 
     // Message states
     val message: String? = null,
@@ -33,8 +30,7 @@ data class ProjectUiState(
 
 @HiltViewModel
 class ProjectViewModel @Inject constructor(
-    private val projectRepository: ProjectRepository,
-    private val expenseRepository: ExpenseRepository
+    private val projectRepository: ProjectRepository
 ) : ViewModel() {
 
     companion object {
@@ -229,138 +225,6 @@ class ProjectViewModel @Inject constructor(
         Log.d(TAG, "selectProject called with project: ${project.name} (${project.id})")
         _uiState.value = _uiState.value.copy(selectedProject = project)
         Log.d(TAG, "selectedProject updated: ${_uiState.value.selectedProject?.name}")
-        // Load expenses for the selected project
-        loadExpenses(project.id)
-    }
-
-    // Expense-related methods
-    fun loadExpenses(projectId: String) {
-        Log.d(TAG, "Loading expenses for project: $projectId")
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
-            
-            expenseRepository.getProjectExpenses(projectId)
-                .onSuccess { expenses ->
-                    Log.d(TAG, "Successfully loaded ${expenses.size} expenses")
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        expenses = expenses
-                    )
-                }
-                .onFailure { error ->
-                    Log.e(TAG, "Failed to load expenses", error)
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        errorMessage = error.message ?: "Failed to load expenses"
-                    )
-                }
-        }
-    }
-
-    fun createExpense(
-        projectId: String,
-        title: String,
-        description: String?,
-        amount: Double,
-        splitUserIds: List<String>
-    ) {
-        if (title.isBlank()) {
-            _uiState.value = _uiState.value.copy(
-                errorMessage = "Expense title cannot be empty"
-            )
-            return
-        }
-
-        if (amount <= 0) {
-            _uiState.value = _uiState.value.copy(
-                errorMessage = "Amount must be greater than 0"
-            )
-            return
-        }
-
-        if (splitUserIds.isEmpty()) {
-            _uiState.value = _uiState.value.copy(
-                errorMessage = "At least one user must be selected"
-            )
-            return
-        }
-
-        Log.d(TAG, "Creating expense: $title for project: $projectId")
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isCreating = true, errorMessage = null)
-            
-            expenseRepository.createExpense(projectId, title.trim(), description?.trim(), amount, splitUserIds)
-                .onSuccess { expense ->
-                    Log.d(TAG, "Expense created successfully: ${expense.id}")
-                    // Add expense to local state immediately
-                    val updatedExpenses = listOf(expense) + _uiState.value.expenses
-                    _uiState.value = _uiState.value.copy(
-                        isCreating = false,
-                        expenses = updatedExpenses,
-                        message = "Expense created successfully"
-                    )
-                }
-                .onFailure { error ->
-                    Log.e(TAG, "Failed to create expense", error)
-                    _uiState.value = _uiState.value.copy(
-                        isCreating = false,
-                        errorMessage = error.message ?: "Failed to create expense"
-                    )
-                }
-        }
-    }
-
-    fun markSplitPaid(projectId: String, expenseId: String, userId: String, isPaid: Boolean) {
-        Log.d(TAG, "Marking split as ${if (isPaid) "paid" else "unpaid"} for expense: $expenseId, user: $userId")
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isUpdating = true, errorMessage = null)
-            
-            expenseRepository.markSplitPaid(projectId, expenseId, userId, isPaid)
-                .onSuccess { updatedExpense ->
-                    Log.d(TAG, "Split status updated successfully")
-                    // Update expense in local state
-                    val updatedExpenses = _uiState.value.expenses.map { expense ->
-                        if (expense.id == expenseId) updatedExpense else expense
-                    }
-                    _uiState.value = _uiState.value.copy(
-                        isUpdating = false,
-                        expenses = updatedExpenses,
-                        message = "Payment status updated"
-                    )
-                }
-                .onFailure { error ->
-                    Log.e(TAG, "Failed to update split status", error)
-                    _uiState.value = _uiState.value.copy(
-                        isUpdating = false,
-                        errorMessage = error.message ?: "Failed to update payment status"
-                    )
-                }
-        }
-    }
-
-    fun deleteExpense(projectId: String, expenseId: String) {
-        Log.d(TAG, "Deleting expense: $expenseId")
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isDeleting = true, errorMessage = null)
-            
-            expenseRepository.deleteExpense(projectId, expenseId)
-                .onSuccess {
-                    Log.d(TAG, "Expense deleted successfully")
-                    val updatedExpenses = _uiState.value.expenses.filter { it.id != expenseId }
-                    _uiState.value = _uiState.value.copy(
-                        isDeleting = false,
-                        expenses = updatedExpenses,
-                        message = "Expense deleted successfully"
-                    )
-                }
-                .onFailure { error ->
-                    Log.e(TAG, "Failed to delete expense", error)
-                    _uiState.value = _uiState.value.copy(
-                        isDeleting = false,
-                        errorMessage = error.message ?: "Failed to delete expense"
-                    )
-                }
-        }
     }
 
     fun addResource(projectId: String, resourceName: String, link: String) {
