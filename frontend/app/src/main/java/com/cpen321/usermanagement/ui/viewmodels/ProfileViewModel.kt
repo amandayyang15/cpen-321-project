@@ -187,4 +187,8 @@ class ProfileViewModel @Inject constructor(
             }
         }
     }
+
+    suspend fun getUserById(userId: String): Result<User> {
+        return profileRepository.getUserById(userId)
+    }
 }

@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
@@ -12,6 +13,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.cpen321.usermanagement.R
+import com.cpen321.usermanagement.data.repository.ExpenseRepositoryImpl
 import com.cpen321.usermanagement.ui.screens.AuthScreen
 import com.cpen321.usermanagement.ui.screens.LoadingScreen
 import com.cpen321.usermanagement.ui.screens.MainScreen
@@ -26,6 +28,15 @@ import com.cpen321.usermanagement.ui.viewmodels.MainViewModel
 import com.cpen321.usermanagement.ui.viewmodels.NavigationViewModel
 import com.cpen321.usermanagement.ui.viewmodels.ProfileViewModel
 import com.cpen321.usermanagement.ui.viewmodels.ProjectViewModel
+import dagger.hilt.EntryPoint
+import dagger.hilt.InstallIn
+import dagger.hilt.components.SingletonComponent
+
+@EntryPoint
+@InstallIn(SingletonComponent::class)
+interface ExpenseRepositoryEntryPoint {
+    fun expenseRepository(): com.cpen321.usermanagement.data.repository.ExpenseRepository
+}
 
 object NavRoutes {
     const val LOADING = "loading"
@@ -163,6 +174,13 @@ private fun AppNavHost(
     projectViewModel: ProjectViewModel,
     navigationStateManager: NavigationStateManager
 ) {
+    val context = LocalContext.current
+    val expenseRepository: com.cpen321.usermanagement.data.repository.ExpenseRepository = 
+        dagger.hilt.android.EntryPointAccessors.fromApplication(
+            context.applicationContext,
+            ExpenseRepositoryEntryPoint::class.java
+        ).expenseRepository()
+    
     NavHost(
         navController = navController,
         startDestination = NavRoutes.LOADING
@@ -227,7 +245,9 @@ private fun AppNavHost(
         composable(NavRoutes.PROJECT_VIEW) {
             ProjectView(
                 navigationStateManager = navigationStateManager,
-                projectViewModel = projectViewModel
+                projectViewModel = projectViewModel,
+                profileViewModel = profileViewModel,
+                expenseRepository = expenseRepository
             )
         }
     }

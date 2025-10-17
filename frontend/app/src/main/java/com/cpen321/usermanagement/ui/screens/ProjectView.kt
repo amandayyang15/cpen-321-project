@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
@@ -56,6 +58,8 @@ import androidx.compose.ui.platform.LocalContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.coroutineScope
 
 data class Expense(
     val id: String,
@@ -71,11 +75,15 @@ data class Expense(
 fun ProjectView(
     navigationStateManager: NavigationStateManager,
     projectViewModel: ProjectViewModel,
+    profileViewModel: com.cpen321.usermanagement.ui.viewmodels.ProfileViewModel,
+    expenseRepository: com.cpen321.usermanagement.data.repository.ExpenseRepository,
     modifier: Modifier = Modifier
 ) {
     ProjectContent(
         navigationStateManager = navigationStateManager,
         projectViewModel = projectViewModel,
+        profileViewModel = profileViewModel,
+        expenseRepository = expenseRepository,
         modifier = modifier
     )
 }
@@ -84,6 +92,8 @@ fun ProjectView(
 private fun ProjectContent(
     navigationStateManager: NavigationStateManager,
     projectViewModel: ProjectViewModel,
+    profileViewModel: com.cpen321.usermanagement.ui.viewmodels.ProfileViewModel,
+    expenseRepository: com.cpen321.usermanagement.data.repository.ExpenseRepository,
     modifier: Modifier = Modifier
 ) {
     val uiState by projectViewModel.uiState.collectAsState()
@@ -107,7 +117,9 @@ private fun ProjectContent(
     ) { paddingValues ->
         ProjectBody(
             paddingValues = paddingValues,
-            projectViewModel = projectViewModel
+            projectViewModel = projectViewModel,
+            profileViewModel = profileViewModel,
+            expenseRepository = expenseRepository
         )
     }
 }
@@ -198,12 +210,15 @@ private fun BackIcon() {
 private fun ProjectBody(
     paddingValues: PaddingValues,
     projectViewModel: ProjectViewModel,
+    profileViewModel: com.cpen321.usermanagement.ui.viewmodels.ProfileViewModel,
+    expenseRepository: com.cpen321.usermanagement.data.repository.ExpenseRepository,
     modifier: Modifier = Modifier
 ) {
     val spacing = LocalSpacing.current
     val context = LocalContext.current
     val uiState by projectViewModel.uiState.collectAsState()
     val currentProject = uiState.selectedProject
+    val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
     
     var progressExpanded by remember { mutableStateOf(false) }
     var selectedProgress by remember { mutableStateOf("In Progress") }
@@ -233,7 +248,69 @@ private fun ProjectBody(
     var expensePaidBy by remember { mutableStateOf("") }
     var paidByExpanded by remember { mutableStateOf(false) }
     var selectedUsersForSplit by remember { mutableStateOf(setOf<String>()) }
-    val availableUsers = listOf("Justin", "Alice", "Bob", "Charlie")
+    
+    // Fetch user names for project members
+    var userIdToNameMap by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    
+    // Fetch user names when project changes
+    androidx.compose.runtime.LaunchedEffect(currentProject?.id) {
+        currentProject?.members?.let { members ->
+            val userMap = mutableMapOf<String, String>()
+            // Fetch all users concurrently
+            coroutineScope {
+                members.forEach { member ->
+                    launch {
+                        profileViewModel.getUserById(member.userId)
+                            .onSuccess { user ->
+                                Log.d("ProjectView", "Fetched user: id=${member.userId}, name=${user.name}")
+                                userMap[member.userId] = user.name
+                                userIdToNameMap = userMap.toMap()
+                            }
+                            .onFailure { 
+                                // Fallback to user ID if name fetch fails
+                                Log.e("ProjectView", "Failed to fetch user: id=${member.userId}")
+                                userMap[member.userId] = member.userId
+                                userIdToNameMap = userMap.toMap()
+                            }
+                    }
+                }
+            }
+        }
+    }
+    
+    // Load expenses when project changes
+    androidx.compose.runtime.LaunchedEffect(currentProject?.id) {
+        currentProject?.let { project ->
+            expenseRepository.getProjectExpenses(project.id)
+                .onSuccess { fetchedExpenses ->
+                    expenses = fetchedExpenses.map { dto ->
+                        Log.d("ProjectView", "Mapping expense DTO: id=${dto.id}, desc=${dto.description}, amount=${dto.amount}, paidBy=${dto.paidBy}, splitBetween=${dto.splitBetween}, perPerson=${dto.amountPerPerson}")
+                        Expense(
+                            id = dto.id,
+                            description = dto.description,
+                            amount = dto.amount,
+                            paidBy = dto.paidBy,
+                            splitBetween = dto.splitBetween,
+                            date = dto.date,
+                            amountPerPerson = dto.amountPerPerson
+                        )
+                    }
+                    Log.d("ProjectView", "Loaded ${expenses.size} expenses for project ${project.id}")
+                    expenses.forEach { exp ->
+                        Log.d("ProjectView", "Expense: desc='${exp.description}', amount=${exp.amount}, paidBy='${exp.paidBy}', splitBetween=${exp.splitBetween}")
+                    }
+                }
+                .onFailure { error ->
+                    Log.e("ProjectView", "Failed to load expenses", error)
+                    Toast.makeText(context, "Failed to load expenses: ${error.message}", Toast.LENGTH_SHORT).show()
+                }
+        }
+    }
+    
+    // Get available users with names (fallback to userId if name not loaded yet)
+    val availableUsers = currentProject?.members?.map { member ->
+        userIdToNameMap[member.userId] ?: member.userId
+    } ?: emptyList()
 
     Column(
         modifier = modifier
@@ -861,65 +938,80 @@ private fun ProjectBody(
                             )
                         }
                         
-                        // Expense Table Rows
-                        expenses.forEach { expense ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = spacing.small, vertical = spacing.small)
-                                    .background(
-                                        color = MaterialTheme.colorScheme.surfaceVariant,
-                                        shape = RoundedCornerShape(4.dp)
+                        // Scrollable Expense Table Rows
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f)
+                                .verticalScroll(rememberScrollState())
+                        ) {
+                            expenses.forEach { expense ->
+                                Log.d("ProjectView", "Rendering expense: paidBy='${expense.paidBy}', splitBetween=${expense.splitBetween}, userIdToNameMap=$userIdToNameMap")
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = spacing.small, vertical = spacing.small)
+                                        .background(
+                                            color = MaterialTheme.colorScheme.surfaceVariant,
+                                            shape = RoundedCornerShape(4.dp)
+                                        )
+                                        .padding(spacing.medium),
+                                    horizontalArrangement = Arrangement.SpaceEvenly,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = expense.description,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier
+                                            .weight(1.5f)
+                                            .padding(horizontal = 4.dp),
+                                        textAlign = TextAlign.Center,
+                                        maxLines = 2
                                     )
-                                    .padding(spacing.medium),
-                                horizontalArrangement = Arrangement.SpaceEvenly,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = expense.description,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier
-                                        .weight(1.5f)
-                                        .padding(horizontal = spacing.small),
-                                    textAlign = TextAlign.Center
-                                )
-                                Text(
-                                    text = "$${String.format("%.2f", expense.amount)}",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .padding(horizontal = spacing.small),
-                                    textAlign = TextAlign.Center
-                                )
-                                Text(
-                                    text = expense.paidBy,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .padding(horizontal = spacing.small),
-                                    textAlign = TextAlign.Center
-                                )
-                                Text(
-                                    text = expense.splitBetween.joinToString(", "),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier
-                                        .weight(1.5f)
-                                        .padding(horizontal = spacing.small),
-                                    textAlign = TextAlign.Center
-                                )
-                                Text(
-                                    text = "$${String.format("%.2f", expense.amountPerPerson)}",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .padding(horizontal = spacing.small),
-                                    textAlign = TextAlign.Center
-                                )
+                                    Text(
+                                        text = "$%.2f".format(expense.amount),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .padding(horizontal = 4.dp),
+                                        textAlign = TextAlign.Center
+                                    )
+                                    Text(
+                                        text = userIdToNameMap[expense.paidBy] ?: expense.paidBy,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .padding(horizontal = 4.dp),
+                                        textAlign = TextAlign.Center,
+                                        maxLines = 2,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = expense.splitBetween.joinToString(", ") { userId ->
+                                            userIdToNameMap[userId] ?: userId
+                                        },
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier
+                                            .weight(1.5f)
+                                            .padding(horizontal = 4.dp),
+                                        textAlign = TextAlign.Center,
+                                        maxLines = 2,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = "$%.2f".format(expense.amountPerPerson),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .padding(horizontal = 4.dp),
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
                             }
                         }
                     }
@@ -1122,33 +1214,51 @@ private fun ProjectBody(
                             if (expenseDescription.isNotBlank() && 
                                 amount != null && amount > 0 && 
                                 expensePaidBy.isNotBlank() && 
-                                selectedUsersForSplit.isNotEmpty()) {
+                                selectedUsersForSplit.isNotEmpty() &&
+                                currentProject != null) {
                                 
-                                val amountPerPerson = amount / selectedUsersForSplit.size
-                                val dateFormat = SimpleDateFormat("MMM dd", Locale.getDefault())
-                                val currentDate = dateFormat.format(Date())
+                                // Map names back to user IDs
+                                val nameToIdMap = userIdToNameMap.entries.associate { it.value to it.key }
+                                val paidByUserId = nameToIdMap[expensePaidBy] ?: expensePaidBy
+                                val splitBetweenUserIds = selectedUsersForSplit.map { name ->
+                                    nameToIdMap[name] ?: name
+                                }
                                 
-                                val newExpense = Expense(
-                                    id = System.currentTimeMillis().toString(),
-                                    description = expenseDescription,
-                                    amount = amount,
-                                    paidBy = expensePaidBy,
-                                    splitBetween = selectedUsersForSplit.toList(),
-                                    date = currentDate,
-                                    amountPerPerson = amountPerPerson
-                                )
-                                
-                                expenses = expenses + newExpense
-                                
-                                Log.d("ProjectView", "Expense created: $newExpense")
-                                Toast.makeText(context, "Expense added: $expenseDescription", Toast.LENGTH_SHORT).show()
-                                
-                                // Reset form
-                                showCreateExpenseDialog = false
-                                expenseDescription = ""
-                                expenseAmount = ""
-                                expensePaidBy = ""
-                                selectedUsersForSplit = setOf()
+                                // Save expense to database
+                                coroutineScope.launch {
+                                    expenseRepository.createExpense(
+                                        projectId = currentProject.id,
+                                        description = expenseDescription,
+                                        amount = amount,
+                                        paidBy = paidByUserId,
+                                        splitBetween = splitBetweenUserIds
+                                    ).onSuccess { createdExpense ->
+                                        // Add to local state
+                                        val newExpense = Expense(
+                                            id = createdExpense.id,
+                                            description = createdExpense.description,
+                                            amount = createdExpense.amount,
+                                            paidBy = createdExpense.paidBy,
+                                            splitBetween = createdExpense.splitBetween,
+                                            date = createdExpense.date,
+                                            amountPerPerson = createdExpense.amountPerPerson
+                                        )
+                                        expenses = expenses + newExpense
+                                        
+                                        Log.d("ProjectView", "Expense created and saved: $newExpense")
+                                        Toast.makeText(context, "Expense added: $expenseDescription", Toast.LENGTH_SHORT).show()
+                                        
+                                        // Reset form
+                                        showCreateExpenseDialog = false
+                                        expenseDescription = ""
+                                        expenseAmount = ""
+                                        expensePaidBy = ""
+                                        selectedUsersForSplit = setOf()
+                                    }.onFailure { error ->
+                                        Log.e("ProjectView", "Failed to create expense", error)
+                                        Toast.makeText(context, "Failed to create expense: ${error.message}", Toast.LENGTH_LONG).show()
+                                    }
+                                }
                             } else {
                                 Toast.makeText(context, "Please fill all fields correctly", Toast.LENGTH_SHORT).show()
                             }

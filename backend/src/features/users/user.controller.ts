@@ -1,4 +1,5 @@
 import { NextFunction, Request, Response } from 'express';
+import mongoose from 'mongoose';
 
 import { GetProfileResponse, UpdateProfileRequest } from './user.types';
 import logger from '../../utils/logger.util';
@@ -13,6 +14,48 @@ export class UserController {
       message: 'Profile fetched successfully',
       data: { user },
     });
+  }
+
+  async getUserById(req: Request, res: Response<GetProfileResponse>, next: NextFunction) {
+    try {
+      const { userId } = req.params;
+
+      if (!userId) {
+        return res.status(400).json({
+          message: 'User ID is required',
+        });
+      }
+
+      // Validate if userId is a valid ObjectId
+      if (!mongoose.Types.ObjectId.isValid(userId)) {
+        return res.status(400).json({
+          message: 'Invalid user ID format',
+        });
+      }
+
+      const user = await userModel.findById(new mongoose.Types.ObjectId(userId));
+
+      if (!user) {
+        return res.status(404).json({
+          message: 'User not found',
+        });
+      }
+
+      res.status(200).json({
+        message: 'User fetched successfully',
+        data: { user },
+      });
+    } catch (error) {
+      logger.error('Failed to fetch user by ID:', error);
+
+      if (error instanceof Error) {
+        return res.status(500).json({
+          message: error.message || 'Failed to fetch user',
+        });
+      }
+
+      next(error);
+    }
   }
 
   async updateProfile(

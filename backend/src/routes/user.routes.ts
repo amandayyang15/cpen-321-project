@@ -17,4 +17,6 @@ router.post(
 
 router.delete('/profile', userController.deleteProfile);
 
+router.get('/:userId', userController.getUserById);
+
 export default router;
