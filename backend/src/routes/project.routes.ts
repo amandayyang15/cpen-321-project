@@ -2,7 +2,6 @@ import { Router } from 'express';
 import { ProjectController } from '../features/projects/project.controller';
 import { validateBody } from '../middleware/validation.middleware';
 import { z } from 'zod';
-import expenseRoutes from './expense.routes';
 
 const router = Router();
 const projectController = new ProjectController();
@@ -35,8 +34,5 @@ router.get('/:projectId', projectController.getProjectById);
 router.put('/:projectId', validateBody(updateProjectSchema), projectController.updateProject);
 router.delete('/:projectId', projectController.deleteProject);
 router.post('/:projectId/resources', validateBody(addResourceSchema), projectController.addResource);
-
-// Expense routes (nested under projects)
-router.use('/:projectId/expenses', expenseRoutes);
 
 export default router;

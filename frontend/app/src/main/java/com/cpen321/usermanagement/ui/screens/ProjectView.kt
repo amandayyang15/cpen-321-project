@@ -16,10 +16,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -46,12 +46,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.cpen321.usermanagement.R
-import com.cpen321.usermanagement.data.remote.dto.Expense
-import com.cpen321.usermanagement.data.remote.dto.Project
-import com.cpen321.usermanagement.data.remote.dto.ProjectMember
 import com.cpen321.usermanagement.data.remote.dto.Resource
 import com.cpen321.usermanagement.ui.navigation.NavigationStateManager
 import com.cpen321.usermanagement.ui.theme.LocalSpacing
@@ -59,22 +55,35 @@ import com.cpen321.usermanagement.ui.viewmodels.ProjectViewModel
 import android.widget.Toast
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.platform.LocalContext
-
-import com.cpen321.usermanagement.ui.theme.LocalSpacing
-
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.coroutineScope
+
+data class Expense(
+    val id: String,
+    val description: String,
+    val amount: Double,
+    val paidBy: String,
+    val splitBetween: List<String>,
+    val date: String,
+    val amountPerPerson: Double
+)
 
 @Composable
 fun ProjectView(
     navigationStateManager: NavigationStateManager,
     projectViewModel: ProjectViewModel,
+    profileViewModel: com.cpen321.usermanagement.ui.viewmodels.ProfileViewModel,
+    expenseRepository: com.cpen321.usermanagement.data.repository.ExpenseRepository,
     modifier: Modifier = Modifier
 ) {
     ProjectContent(
         navigationStateManager = navigationStateManager,
         projectViewModel = projectViewModel,
+        profileViewModel = profileViewModel,
+        expenseRepository = expenseRepository,
         modifier = modifier
     )
 }
@@ -83,6 +92,8 @@ fun ProjectView(
 private fun ProjectContent(
     navigationStateManager: NavigationStateManager,
     projectViewModel: ProjectViewModel,
+    profileViewModel: com.cpen321.usermanagement.ui.viewmodels.ProfileViewModel,
+    expenseRepository: com.cpen321.usermanagement.data.repository.ExpenseRepository,
     modifier: Modifier = Modifier
 ) {
     val uiState by projectViewModel.uiState.collectAsState()
@@ -106,7 +117,9 @@ private fun ProjectContent(
     ) { paddingValues ->
         ProjectBody(
             paddingValues = paddingValues,
-            projectViewModel = projectViewModel
+            projectViewModel = projectViewModel,
+            profileViewModel = profileViewModel,
+            expenseRepository = expenseRepository
         )
     }
 }
@@ -197,12 +210,15 @@ private fun BackIcon() {
 private fun ProjectBody(
     paddingValues: PaddingValues,
     projectViewModel: ProjectViewModel,
+    profileViewModel: com.cpen321.usermanagement.ui.viewmodels.ProfileViewModel,
+    expenseRepository: com.cpen321.usermanagement.data.repository.ExpenseRepository,
     modifier: Modifier = Modifier
 ) {
     val spacing = LocalSpacing.current
     val context = LocalContext.current
     val uiState by projectViewModel.uiState.collectAsState()
     val currentProject = uiState.selectedProject
+    val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
     
     var progressExpanded by remember { mutableStateOf(false) }
     var selectedProgress by remember { mutableStateOf("In Progress") }
@@ -225,35 +241,76 @@ private fun ProjectBody(
     var removeUserExpanded by remember { mutableStateOf(false) }
 
     // Expense state
+    var expenses by remember { mutableStateOf(listOf<Expense>()) }
     var showCreateExpenseDialog by remember { mutableStateOf(false) }
-    var expenseTitle by remember { mutableStateOf("") }
     var expenseDescription by remember { mutableStateOf("") }
     var expenseAmount by remember { mutableStateOf("") }
+    var expensePaidBy by remember { mutableStateOf("") }
     var paidByExpanded by remember { mutableStateOf(false) }
     var selectedUsersForSplit by remember { mutableStateOf(setOf<String>()) }
     
-    // Get actual project members
-    val projectMembers = currentProject?.members ?: emptyList()
-    val ownerMember = currentProject?.let { 
-        ProjectMember(userId = it.ownerId, role = "owner", joinedAt = it.createdAt)
-    }
-    // Only add owner if they're not already in projectMembers (avoid duplicates)
-    val allMembers = if (ownerMember != null && !projectMembers.any { it.userId == ownerMember.userId }) {
-        listOf(ownerMember) + projectMembers
-    } else {
-        projectMembers
-    }
+    // Fetch user names for project members
+    var userIdToNameMap by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     
-    // Get expenses from ViewModel
-    val expenses = uiState.expenses
-    
-    // Load expenses when switching to Expense tab or when project changes
-    LaunchedEffect(selectedTab, currentProject?.id) {
-        if (selectedTab == "Expense" && currentProject != null) {
-            Log.d("ProjectView", "Loading expenses for project: ${currentProject.id}")
-            projectViewModel.loadExpenses(currentProject.id)
+    // Fetch user names when project changes
+    androidx.compose.runtime.LaunchedEffect(currentProject?.id) {
+        currentProject?.members?.let { members ->
+            val userMap = mutableMapOf<String, String>()
+            // Fetch all users concurrently
+            coroutineScope {
+                members.forEach { member ->
+                    launch {
+                        profileViewModel.getUserById(member.userId)
+                            .onSuccess { user ->
+                                Log.d("ProjectView", "Fetched user: id=${member.userId}, name=${user.name}")
+                                userMap[member.userId] = user.name
+                                userIdToNameMap = userMap.toMap()
+                            }
+                            .onFailure { 
+                                // Fallback to user ID if name fetch fails
+                                Log.e("ProjectView", "Failed to fetch user: id=${member.userId}")
+                                userMap[member.userId] = member.userId
+                                userIdToNameMap = userMap.toMap()
+                            }
+                    }
+                }
+            }
         }
     }
+    
+    // Load expenses when project changes
+    androidx.compose.runtime.LaunchedEffect(currentProject?.id) {
+        currentProject?.let { project ->
+            expenseRepository.getProjectExpenses(project.id)
+                .onSuccess { fetchedExpenses ->
+                    expenses = fetchedExpenses.map { dto ->
+                        Log.d("ProjectView", "Mapping expense DTO: id=${dto.id}, desc=${dto.description}, amount=${dto.amount}, paidBy=${dto.paidBy}, splitBetween=${dto.splitBetween}, perPerson=${dto.amountPerPerson}")
+                        Expense(
+                            id = dto.id,
+                            description = dto.description,
+                            amount = dto.amount,
+                            paidBy = dto.paidBy,
+                            splitBetween = dto.splitBetween,
+                            date = dto.date,
+                            amountPerPerson = dto.amountPerPerson
+                        )
+                    }
+                    Log.d("ProjectView", "Loaded ${expenses.size} expenses for project ${project.id}")
+                    expenses.forEach { exp ->
+                        Log.d("ProjectView", "Expense: desc='${exp.description}', amount=${exp.amount}, paidBy='${exp.paidBy}', splitBetween=${exp.splitBetween}")
+                    }
+                }
+                .onFailure { error ->
+                    Log.e("ProjectView", "Failed to load expenses", error)
+                    Toast.makeText(context, "Failed to load expenses: ${error.message}", Toast.LENGTH_SHORT).show()
+                }
+        }
+    }
+    
+    // Get available users with names (fallback to userId if name not loaded yet)
+    val availableUsers = currentProject?.members?.map { member ->
+        userIdToNameMap[member.userId] ?: member.userId
+    } ?: emptyList()
 
     Column(
         modifier = modifier
@@ -816,17 +873,145 @@ private fun ProjectBody(
                             modifier = Modifier.fillMaxWidth().padding(spacing.large)
                         )
                     } else {
+                        // Expense Table Header
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = spacing.small, vertical = spacing.medium)
+                                .background(
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    shape = RoundedCornerShape(4.dp)
+                                )
+                                .padding(spacing.medium),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Description",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier
+                                    .weight(1.5f)
+                                    .padding(horizontal = spacing.small),
+                                textAlign = TextAlign.Center
+                            )
+                            Text(
+                                text = "Amount",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(horizontal = spacing.small),
+                                textAlign = TextAlign.Center
+                            )
+                            Text(
+                                text = "Paid By",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(horizontal = spacing.small),
+                                textAlign = TextAlign.Center
+                            )
+                            Text(
+                                text = "Split Between",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier
+                                    .weight(1.5f)
+                                    .padding(horizontal = spacing.small),
+                                textAlign = TextAlign.Center
+                            )
+                            Text(
+                                text = "Per Person",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(horizontal = spacing.small),
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                        
+                        // Scrollable Expense Table Rows
                         Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(spacing.medium)
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f)
+                                .verticalScroll(rememberScrollState())
                         ) {
                             expenses.forEach { expense ->
-                                ExpenseCard(
-                                    expense = expense,
-                                    currentProject = currentProject,
-                                    projectViewModel = projectViewModel,
-                                    modifier = Modifier.fillMaxWidth()
-                                )
+                                Log.d("ProjectView", "Rendering expense: paidBy='${expense.paidBy}', splitBetween=${expense.splitBetween}, userIdToNameMap=$userIdToNameMap")
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = spacing.small, vertical = spacing.small)
+                                        .background(
+                                            color = MaterialTheme.colorScheme.surfaceVariant,
+                                            shape = RoundedCornerShape(4.dp)
+                                        )
+                                        .padding(spacing.medium),
+                                    horizontalArrangement = Arrangement.SpaceEvenly,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = expense.description,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier
+                                            .weight(1.5f)
+                                            .padding(horizontal = 4.dp),
+                                        textAlign = TextAlign.Center,
+                                        maxLines = 2
+                                    )
+                                    Text(
+                                        text = "$%.2f".format(expense.amount),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .padding(horizontal = 4.dp),
+                                        textAlign = TextAlign.Center
+                                    )
+                                    Text(
+                                        text = userIdToNameMap[expense.paidBy] ?: expense.paidBy,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .padding(horizontal = 4.dp),
+                                        textAlign = TextAlign.Center,
+                                        maxLines = 2,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = expense.splitBetween.joinToString(", ") { userId ->
+                                            userIdToNameMap[userId] ?: userId
+                                        },
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier
+                                            .weight(1.5f)
+                                            .padding(horizontal = 4.dp),
+                                        textAlign = TextAlign.Center,
+                                        maxLines = 2,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = "$%.2f".format(expense.amountPerPerson),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .padding(horizontal = 4.dp),
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
                             }
                         }
                     }
@@ -937,74 +1122,85 @@ private fun ProjectBody(
                         verticalArrangement = Arrangement.spacedBy(spacing.medium)
                     ) {
                         OutlinedTextField(
-                            value = expenseTitle,
-                            onValueChange = { expenseTitle = it },
-                            label = { Text("Title") },
-                            modifier = Modifier.fillMaxWidth(),
-                            placeholder = { Text("e.g., Team Lunch") }
-                        )
-                        
-                        OutlinedTextField(
                             value = expenseDescription,
                             onValueChange = { expenseDescription = it },
-                            label = { Text("Description (optional)") },
-                            modifier = Modifier.fillMaxWidth(),
-                            placeholder = { Text("e.g., Lunch at restaurant") }
+                            label = { Text("Description") },
+                            modifier = Modifier.fillMaxWidth()
                         )
                         
                         OutlinedTextField(
                             value = expenseAmount,
                             onValueChange = { expenseAmount = it },
                             label = { Text("Amount ($)") },
-                            modifier = Modifier.fillMaxWidth(),
-                            placeholder = { Text("0.00") }
+                            modifier = Modifier.fillMaxWidth()
                         )
                         
-                        // Split Between Multi-select
+                        // Paid By Dropdown
                         Text(
-                            text = "Split between (select users):",
+                            text = "Paid By:",
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Medium
                         )
+                        Box {
+                            TextButton(
+                                onClick = { paidByExpanded = !paidByExpanded },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    text = expensePaidBy.ifEmpty { "Select who paid" },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    textAlign = TextAlign.Start
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = paidByExpanded,
+                                onDismissRequest = { paidByExpanded = false }
+                            ) {
+                                availableUsers.forEach { user ->
+                                    DropdownMenuItem(
+                                        text = { Text(user) },
+                                        onClick = {
+                                            expensePaidBy = user
+                                            paidByExpanded = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
                         
-                        if (allMembers.isEmpty()) {
-                            Text(
-                                text = "No members in this project",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.error
-                            )
-                        } else {
-                            Column {
-                                allMembers.forEach { member ->
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Checkbox(
-                                            checked = selectedUsersForSplit.contains(member.userId),
-                                            onCheckedChange = { isChecked ->
-                                                selectedUsersForSplit = if (isChecked) {
-                                                    selectedUsersForSplit + member.userId
-                                                } else {
-                                                    selectedUsersForSplit - member.userId
-                                                }
+                        // Split Between Multi-select
+                        Text(
+                            text = "Split between:",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Column {
+                            availableUsers.forEach { user ->
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Checkbox(
+                                        checked = selectedUsersForSplit.contains(user),
+                                        onCheckedChange = { isChecked ->
+                                            selectedUsersForSplit = if (isChecked) {
+                                                selectedUsersForSplit + user
+                                            } else {
+                                                selectedUsersForSplit - user
                                             }
-                                        )
-                                        Text(
-                                            text = "${if (member.role == "owner") "👑 " else ""}User ${member.userId.take(8)}",
-                                            modifier = Modifier.padding(start = spacing.small)
-                                        )
-                                    }
+                                        }
+                                    )
+                                    Text(
+                                        text = user,
+                                        modifier = Modifier.padding(start = spacing.small)
+                                    )
                                 }
                             }
                         }
                         
                         if (selectedUsersForSplit.isNotEmpty()) {
-                            val amount = expenseAmount.toDoubleOrNull() ?: 0.0
-                            val amountPerPerson = if (selectedUsersForSplit.isNotEmpty()) 
-                                amount / selectedUsersForSplit.size else 0.0
                             Text(
-                                text = "${selectedUsersForSplit.size} users selected • $${String.format("%.2f", amountPerPerson)} each",
+                                text = "Selected: ${selectedUsersForSplit.joinToString(", ")}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.primary
                             )
@@ -1015,45 +1211,56 @@ private fun ProjectBody(
                     Button(
                         onClick = {
                             val amount = expenseAmount.toDoubleOrNull()
-                            Log.d("ProjectView", "=== CREATE EXPENSE BUTTON CLICKED ===")
-                            Log.d("ProjectView", "Title: '$expenseTitle'")
-                            Log.d("ProjectView", "Description: '$expenseDescription'")
-                            Log.d("ProjectView", "Amount string: '$expenseAmount'")
-                            Log.d("ProjectView", "Amount parsed: $amount")
-                            Log.d("ProjectView", "Selected users: $selectedUsersForSplit")
-                            Log.d("ProjectView", "Current project: ${currentProject?.id}")
-                            Log.d("ProjectView", "All members: ${allMembers.map { it.userId }}")
-                            
-                            if (expenseTitle.isNotBlank() && 
+                            if (expenseDescription.isNotBlank() && 
                                 amount != null && amount > 0 && 
+                                expensePaidBy.isNotBlank() && 
                                 selectedUsersForSplit.isNotEmpty() &&
                                 currentProject != null) {
                                 
-                                Log.d("ProjectView", "Validation passed - calling createExpense")
-                                projectViewModel.createExpense(
-                                    projectId = currentProject.id,
-                                    title = expenseTitle,
-                                    description = expenseDescription.ifBlank { null },
-                                    amount = amount,
-                                    splitUserIds = selectedUsersForSplit.toList()
-                                )
+                                // Map names back to user IDs
+                                val nameToIdMap = userIdToNameMap.entries.associate { it.value to it.key }
+                                val paidByUserId = nameToIdMap[expensePaidBy] ?: expensePaidBy
+                                val splitBetweenUserIds = selectedUsersForSplit.map { name ->
+                                    nameToIdMap[name] ?: name
+                                }
                                 
-                                Log.d("ProjectView", "Expense creation call completed")
-                                Toast.makeText(context, "Expense added: $expenseTitle", Toast.LENGTH_SHORT).show()
-                                
-                                // Reset form
-                                showCreateExpenseDialog = false
-                                expenseTitle = ""
-                                expenseDescription = ""
-                                expenseAmount = ""
-                                selectedUsersForSplit = setOf()
+                                // Save expense to database
+                                coroutineScope.launch {
+                                    expenseRepository.createExpense(
+                                        projectId = currentProject.id,
+                                        description = expenseDescription,
+                                        amount = amount,
+                                        paidBy = paidByUserId,
+                                        splitBetween = splitBetweenUserIds
+                                    ).onSuccess { createdExpense ->
+                                        // Add to local state
+                                        val newExpense = Expense(
+                                            id = createdExpense.id,
+                                            description = createdExpense.description,
+                                            amount = createdExpense.amount,
+                                            paidBy = createdExpense.paidBy,
+                                            splitBetween = createdExpense.splitBetween,
+                                            date = createdExpense.date,
+                                            amountPerPerson = createdExpense.amountPerPerson
+                                        )
+                                        expenses = expenses + newExpense
+                                        
+                                        Log.d("ProjectView", "Expense created and saved: $newExpense")
+                                        Toast.makeText(context, "Expense added: $expenseDescription", Toast.LENGTH_SHORT).show()
+                                        
+                                        // Reset form
+                                        showCreateExpenseDialog = false
+                                        expenseDescription = ""
+                                        expenseAmount = ""
+                                        expensePaidBy = ""
+                                        selectedUsersForSplit = setOf()
+                                    }.onFailure { error ->
+                                        Log.e("ProjectView", "Failed to create expense", error)
+                                        Toast.makeText(context, "Failed to create expense: ${error.message}", Toast.LENGTH_LONG).show()
+                                    }
+                                }
                             } else {
-                                Log.e("ProjectView", "Validation failed!")
-                                Log.e("ProjectView", "  Title blank? ${expenseTitle.isBlank()}")
-                                Log.e("ProjectView", "  Amount null or <= 0? ${amount == null || amount <= 0}")
-                                Log.e("ProjectView", "  No users selected? ${selectedUsersForSplit.isEmpty()}")
-                                Log.e("ProjectView", "  No project? ${currentProject == null}")
-                                Toast.makeText(context, "Please fill all required fields correctly", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Please fill all fields correctly", Toast.LENGTH_SHORT).show()
                             }
                         }
                     ) {
@@ -1064,9 +1271,9 @@ private fun ProjectBody(
                     TextButton(
                         onClick = { 
                             showCreateExpenseDialog = false
-                            expenseTitle = ""
                             expenseDescription = ""
                             expenseAmount = ""
+                            expensePaidBy = ""
                             selectedUsersForSplit = setOf()
                         }
                     ) {
@@ -1238,128 +1445,4 @@ private fun AddResourceDialog(
             }
         }
     )
-}
-
-@Composable
-private fun ExpenseCard(
-    expense: Expense,
-    currentProject: Project?,
-    projectViewModel: ProjectViewModel,
-    modifier: Modifier = Modifier
-) {
-    val spacing = LocalSpacing.current
-    val context = LocalContext.current
-    
-    Card(
-        modifier = modifier,
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(spacing.medium)
-        ) {
-            // Header
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = expense.title,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    if (expense.description != null) {
-                        Text(
-                            text = expense.description,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                        )
-                    }
-                }
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        text = "$${String.format("%.2f", expense.amount)}",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Text(
-                        text = expense.status.uppercase(),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = when(expense.status) {
-                            "fully_paid" -> MaterialTheme.colorScheme.tertiary
-                            "pending" -> MaterialTheme.colorScheme.secondary
-                            else -> MaterialTheme.colorScheme.error
-                        }
-                    )
-                }
-            }
-            
-            Spacer(modifier = Modifier.height(spacing.small))
-            
-            // Created by info
-            Text(
-                text = "Created by ${expense.createdBy.name}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-            )
-            
-            Spacer(modifier = Modifier.height(spacing.medium))
-            
-            // Splits
-            Text(
-                text = "Split Details:",
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Medium
-            )
-            
-            Spacer(modifier = Modifier.height(spacing.small))
-            
-            expense.splits.forEach { split ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = spacing.extraSmall),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Checkbox(
-                            checked = split.isPaid,
-                            onCheckedChange = { isPaid ->
-                                currentProject?.let { project ->
-                                    projectViewModel.markSplitPaid(
-                                        projectId = project.id,
-                                        expenseId = expense.id,
-                                        userId = split.userId.id,
-                                        isPaid = isPaid
-                                    )
-                                }
-                            }
-                        )
-                        Text(
-                            text = split.userId.name,
-                            style = MaterialTheme.typography.bodyMedium,
-                            textDecoration = if (split.isPaid) TextDecoration.LineThrough else null
-                        )
-                    }
-                    Text(
-                        text = "$${String.format("%.2f", split.amount)}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium,
-                        color = if (split.isPaid) 
-                            MaterialTheme.colorScheme.tertiary 
-                        else 
-                            MaterialTheme.colorScheme.error
-                    )
-                }
-            }
-        }
-    }
 }

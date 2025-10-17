@@ -18,6 +18,12 @@ interface UserInterface {
     @GET("user/profile")
     suspend fun getProfile(@Header("Authorization") authHeader: String): Response<ApiResponse<ProfileData>>
 
+    @GET("user/{userId}")
+    suspend fun getUserById(
+        @Header("Authorization") authHeader: String,
+        @retrofit2.http.Path("userId") userId: String
+    ): Response<ApiResponse<ProfileData>>
+
     @POST("user/profile")
     suspend fun updateProfile(
         @Header("Authorization") authHeader: String,
