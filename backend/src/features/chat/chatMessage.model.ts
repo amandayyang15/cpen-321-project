@@ -112,7 +112,6 @@ export class ChatMessageModel {
         projectId, 
         isDeleted: false 
       })
-        .populate('senderId', 'name email profilePicture')
         .sort({ createdAt: 1 })
         .limit(limit)
         .skip(skip);

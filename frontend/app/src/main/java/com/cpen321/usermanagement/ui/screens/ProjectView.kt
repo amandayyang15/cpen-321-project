@@ -241,7 +241,9 @@ private fun ProjectBody(
     val spacing = LocalSpacing.current
     val context = LocalContext.current
     val uiState by projectViewModel.uiState.collectAsState()
+    val profileUiState by profileViewModel.uiState.collectAsState()
     val currentProject = uiState.selectedProject
+    val currentUser = profileUiState.user
     val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
     
     var progressExpanded by remember { mutableStateOf(false) }
@@ -275,6 +277,43 @@ private fun ProjectBody(
     
     // Chat state - now using backend messages from ViewModel
     val backendMessages = uiState.messages
+    
+    // Load current user profile
+    LaunchedEffect(Unit) {
+        Log.d("ProjectView", "Loading user profile... Current user in state: ${profileUiState.user?._id}")
+        if (profileUiState.user == null) {
+            profileViewModel.loadProfile()
+        }
+    }
+    
+    // Debug user loading
+    LaunchedEffect(currentUser) {
+        Log.d("ProjectView", "Current user changed: ${currentUser?._id}, name: ${currentUser?.name}")
+    }
+    
+    // Re-map messages when user profile is loaded to ensure proper alignment
+    val mappedMessages = remember(backendMessages, currentUser) {
+        Log.d("ProjectView", "Re-mapping messages. Current user: ${currentUser?._id}, Messages count: ${backendMessages?.size ?: 0}")
+        backendMessages?.map { backendMessage ->
+            val isFromCurrentUser = currentUser?._id == backendMessage.senderId
+            Log.d("ProjectView", "Message from ${backendMessage.senderName} (${backendMessage.senderId}) - isFromCurrentUser: $isFromCurrentUser")
+            Log.d("ProjectView", "Comparing: '${currentUser?._id}' == '${backendMessage.senderId}' = ${currentUser?._id == backendMessage.senderId}")
+            Log.d("ProjectView", "Current user ID: '${currentUser?._id}', Sender ID: '${backendMessage.senderId}'")
+            
+            // Use the actual comparison result
+            val finalIsFromCurrentUser = isFromCurrentUser
+            
+            ChatMessage(
+                id = backendMessage.id,
+                content = backendMessage.content,
+                senderName = backendMessage.senderName,
+                senderId = backendMessage.senderId,
+                timestamp = backendMessage.timestamp,
+                projectId = backendMessage.projectId,
+                isFromCurrentUser = finalIsFromCurrentUser
+            )
+        } ?: emptyList()
+    }
     
     // Fetch user names for project members
     var userIdToNameMap by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
@@ -886,17 +925,7 @@ private fun ProjectBody(
                 }
                 "Chat" -> {
                     ChatScreen(
-                        messages = backendMessages?.map { backendMessage ->
-                            ChatMessage(
-                                id = backendMessage.id,
-                                content = backendMessage.content,
-                                senderName = backendMessage.senderName,
-                                senderId = backendMessage.senderId,
-                                timestamp = backendMessage.timestamp,
-                                projectId = backendMessage.projectId,
-                                isFromCurrentUser = false // TODO: Compare with current user ID
-                            )
-                        } ?: emptyList(),
+                        messages = mappedMessages,
                         onSendMessage = { message ->
                             currentProject?.let { project ->
                                 try {
