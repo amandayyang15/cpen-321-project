@@ -3,6 +3,7 @@ package com.cpen321.usermanagement.ui.viewmodels
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.cpen321.usermanagement.data.remote.dto.ChatMessage
 import com.cpen321.usermanagement.data.remote.dto.Project
 import com.cpen321.usermanagement.data.repository.ProjectRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -18,10 +19,13 @@ data class ProjectUiState(
     val isCreating: Boolean = false,
     val isUpdating: Boolean = false,
     val isDeleting: Boolean = false,
+    val isSending: Boolean = false,
+    val isLoadingMessages: Boolean = false,
 
     // Data states
     val projects: List<Project> = emptyList(),
     val selectedProject: Project? = null,
+    val messages: List<ChatMessage> = emptyList(),
 
     // Message states
     val message: String? = null,
@@ -303,6 +307,100 @@ class ProjectViewModel @Inject constructor(
     fun refreshAllProjects() {
         Log.d(TAG, "Refreshing all projects for user")
         loadUserProjects()
+    }
+
+    fun sendMessage(projectId: String, content: String) {
+        Log.d(TAG, "sendMessage called with projectId: $projectId, content: '$content'")
+        
+        if (content.isBlank()) {
+            Log.d(TAG, "Message content is blank, showing error")
+            _uiState.value = _uiState.value.copy(
+                errorMessage = "Message content cannot be empty"
+            )
+            return
+        }
+
+        if (content.length > 2000) {
+            Log.d(TAG, "Message content too long, showing error")
+            _uiState.value = _uiState.value.copy(
+                errorMessage = "Message content must be less than 2000 characters"
+            )
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isSending = true, errorMessage = null)
+            
+            projectRepository.sendMessage(projectId, content.trim())
+                .onSuccess { message ->
+                    Log.d(TAG, "Message sent successfully: ${message.id}")
+                    // Add message to local state immediately for instant UI update
+                    val currentMessages = _uiState.value.messages
+                    val updatedMessages = currentMessages + message
+                    _uiState.value = _uiState.value.copy(
+                        isSending = false,
+                        messages = updatedMessages,
+                        message = "Message sent successfully"
+                    )
+                }
+                .onFailure { error ->
+                    Log.e(TAG, "Failed to send message", error)
+                    _uiState.value = _uiState.value.copy(
+                        isSending = false,
+                        errorMessage = error.message ?: "Failed to send message"
+                    )
+                }
+        }
+    }
+
+    fun loadMessages(projectId: String) {
+        Log.d(TAG, "loadMessages called with projectId: $projectId")
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoadingMessages = true, errorMessage = null)
+            
+            projectRepository.getMessages(projectId)
+                .onSuccess { messages ->
+                    Log.d(TAG, "Messages loaded successfully: ${messages.size} messages")
+                    _uiState.value = _uiState.value.copy(
+                        isLoadingMessages = false,
+                        messages = messages,
+                        message = "Messages loaded successfully"
+                    )
+                }
+                .onFailure { error ->
+                    Log.e(TAG, "Failed to load messages", error)
+                    _uiState.value = _uiState.value.copy(
+                        isLoadingMessages = false,
+                        errorMessage = error.message ?: "Failed to load messages"
+                    )
+                }
+        }
+    }
+
+    fun deleteMessage(projectId: String, messageId: String) {
+        Log.d(TAG, "deleteMessage called with projectId: $projectId, messageId: $messageId")
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isDeleting = true, errorMessage = null)
+            
+            projectRepository.deleteMessage(projectId, messageId)
+                .onSuccess {
+                    Log.d(TAG, "Message deleted successfully: $messageId")
+                    // Remove message from local state
+                    val updatedMessages = _uiState.value.messages.filter { it.id != messageId }
+                    _uiState.value = _uiState.value.copy(
+                        isDeleting = false,
+                        messages = updatedMessages,
+                        message = "Message deleted successfully"
+                    )
+                }
+                .onFailure { error ->
+                    Log.e(TAG, "Failed to delete message", error)
+                    _uiState.value = _uiState.value.copy(
+                        isDeleting = false,
+                        errorMessage = error.message ?: "Failed to delete message"
+                    )
+                }
+        }
     }
 
     fun clearMessages() {

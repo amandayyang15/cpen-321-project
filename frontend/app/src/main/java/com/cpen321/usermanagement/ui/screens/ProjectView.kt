@@ -15,29 +15,42 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import android.util.Log
 import androidx.compose.ui.Alignment
@@ -48,6 +61,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.cpen321.usermanagement.R
+import com.cpen321.usermanagement.data.remote.dto.ChatMessage as BackendChatMessage
 import com.cpen321.usermanagement.data.remote.dto.Resource
 import com.cpen321.usermanagement.ui.navigation.NavigationStateManager
 import com.cpen321.usermanagement.ui.theme.LocalSpacing
@@ -69,6 +83,16 @@ data class Expense(
     val splitBetween: List<String>,
     val date: String,
     val amountPerPerson: Double
+)
+
+data class ChatMessage(
+    val id: String,
+    val content: String,
+    val senderName: String,
+    val senderId: String,
+    val timestamp: Long,
+    val projectId: String,
+    val isFromCurrentUser: Boolean = false
 )
 
 @Composable
@@ -217,7 +241,9 @@ private fun ProjectBody(
     val spacing = LocalSpacing.current
     val context = LocalContext.current
     val uiState by projectViewModel.uiState.collectAsState()
+    val profileUiState by profileViewModel.uiState.collectAsState()
     val currentProject = uiState.selectedProject
+    val currentUser = profileUiState.user
     val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
     
     var progressExpanded by remember { mutableStateOf(false) }
@@ -249,6 +275,46 @@ private fun ProjectBody(
     var paidByExpanded by remember { mutableStateOf(false) }
     var selectedUsersForSplit by remember { mutableStateOf(setOf<String>()) }
     
+    // Chat state - now using backend messages from ViewModel
+    val backendMessages = uiState.messages
+    
+    // Load current user profile
+    LaunchedEffect(Unit) {
+        Log.d("ProjectView", "Loading user profile... Current user in state: ${profileUiState.user?._id}")
+        if (profileUiState.user == null) {
+            profileViewModel.loadProfile()
+        }
+    }
+    
+    // Debug user loading
+    LaunchedEffect(currentUser) {
+        Log.d("ProjectView", "Current user changed: ${currentUser?._id}, name: ${currentUser?.name}")
+    }
+    
+    // Re-map messages when user profile is loaded to ensure proper alignment
+    val mappedMessages = remember(backendMessages, currentUser) {
+        Log.d("ProjectView", "Re-mapping messages. Current user: ${currentUser?._id}, Messages count: ${backendMessages?.size ?: 0}")
+        backendMessages?.map { backendMessage ->
+            val isFromCurrentUser = currentUser?._id == backendMessage.senderId
+            Log.d("ProjectView", "Message from ${backendMessage.senderName} (${backendMessage.senderId}) - isFromCurrentUser: $isFromCurrentUser")
+            Log.d("ProjectView", "Comparing: '${currentUser?._id}' == '${backendMessage.senderId}' = ${currentUser?._id == backendMessage.senderId}")
+            Log.d("ProjectView", "Current user ID: '${currentUser?._id}', Sender ID: '${backendMessage.senderId}'")
+            
+            // Use the actual comparison result
+            val finalIsFromCurrentUser = isFromCurrentUser
+            
+            ChatMessage(
+                id = backendMessage.id,
+                content = backendMessage.content,
+                senderName = backendMessage.senderName,
+                senderId = backendMessage.senderId,
+                timestamp = backendMessage.timestamp,
+                projectId = backendMessage.projectId,
+                isFromCurrentUser = finalIsFromCurrentUser
+            )
+        } ?: emptyList()
+    }
+    
     // Fetch user names for project members
     var userIdToNameMap by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     
@@ -274,6 +340,17 @@ private fun ProjectBody(
                             }
                     }
                 }
+            }
+        }
+    }
+    
+    // Load messages when Chat tab is selected
+    androidx.compose.runtime.LaunchedEffect(selectedTab, currentProject?.id) {
+        if (selectedTab == "Chat" && currentProject != null) {
+            try {
+                projectViewModel.loadMessages(currentProject.id)
+            } catch (e: Exception) {
+                Log.e("ProjectView", "Error loading messages for project ${currentProject.id}", e)
             }
         }
     }
@@ -847,12 +924,19 @@ private fun ProjectBody(
                     }
                 }
                 "Chat" -> {
-                    Text(
-                        text = "Chat",
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                        textAlign = TextAlign.Center
+                    ChatScreen(
+                        messages = mappedMessages,
+                        onSendMessage = { message ->
+                            currentProject?.let { project ->
+                                try {
+                                    projectViewModel.sendMessage(project.id, message)
+                                } catch (e: Exception) {
+                                    Log.e("ProjectView", "Error sending message", e)
+                                }
+                            }
+                        },
+                        isLoading = uiState.isLoadingMessages,
+                        isSending = uiState.isSending
                     )
                 }
                 "Expense" -> {
@@ -1445,4 +1529,240 @@ private fun AddResourceDialog(
             }
         }
     )
+}
+
+@Composable
+fun ChatScreen(
+    messages: List<ChatMessage> = emptyList(),
+    onSendMessage: (String) -> Unit = {},
+    isLoading: Boolean = false,
+    isSending: Boolean = false,
+    modifier: Modifier = Modifier
+) {
+    val spacing = LocalSpacing.current
+    var messageText by remember { mutableStateOf("") }
+    val listState = rememberLazyListState()
+    val coroutineScope = rememberCoroutineScope()
+    
+
+    // Auto-scroll to bottom when new messages arrive
+    LaunchedEffect(messages.size) {
+        if (messages.isNotEmpty() && messages.size > 0) {
+            try {
+                coroutineScope.launch {
+                    listState.animateScrollToItem(messages.size - 1)
+                }
+            } catch (e: Exception) {
+                Log.e("ChatScreen", "Error scrolling to bottom", e)
+            }
+        }
+    }
+
+    Column(
+        modifier = modifier.fillMaxSize()
+    ) {
+        // Messages List
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+        ) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = spacing.medium),
+                verticalArrangement = Arrangement.spacedBy(spacing.small),
+                contentPadding = PaddingValues(vertical = spacing.medium)
+            ) {
+                if (isLoading) {
+                    item {
+                        Box(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator()
+                        }
+                    }
+                } else if (messages.isEmpty()) {
+                    item {
+                        EmptyChatMessage()
+                    }
+                } else {
+                    items(messages) { message ->
+                        ChatMessageItem(message = message)
+                    }
+                }
+            }
+        }
+
+        // Message Input
+        MessageInput(
+            messageText = messageText,
+            onMessageTextChange = { messageText = it },
+            onSendClick = {
+                if (messageText.isNotBlank() && !isSending) {
+                    onSendMessage(messageText.trim())
+                    messageText = ""
+                }
+            },
+            isSending = isSending,
+            modifier = Modifier.padding(spacing.medium)
+        )
+    }
+}
+
+@Composable
+private fun EmptyChatMessage(
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier.fillMaxWidth(),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = "No messages yet.\nStart the conversation!",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+@Composable
+private fun ChatMessageItem(
+    message: ChatMessage,
+    modifier: Modifier = Modifier
+) {
+    val spacing = LocalSpacing.current
+    
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = if (message.isFromCurrentUser) {
+            Arrangement.End
+        } else {
+            Arrangement.Start
+        }
+    ) {
+        Card(
+            modifier = Modifier.widthIn(max = 280.dp),
+            shape = RoundedCornerShape(
+                topStart = 16.dp,
+                topEnd = 16.dp,
+                bottomStart = if (message.isFromCurrentUser) 4.dp else 16.dp,
+                bottomEnd = if (message.isFromCurrentUser) 16.dp else 4.dp
+            ),
+            colors = CardDefaults.cardColors(
+                containerColor = if (message.isFromCurrentUser) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.surfaceVariant
+                }
+            )
+        ) {
+            Column(
+                modifier = Modifier.padding(spacing.medium)
+            ) {
+                if (!message.isFromCurrentUser) {
+                    Text(
+                        text = message.senderName,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        fontWeight = FontWeight.Medium
+                    )
+                    Spacer(modifier = Modifier.height(spacing.extraSmall))
+                }
+                
+                Text(
+                    text = message.content,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (message.isFromCurrentUser) {
+                        MaterialTheme.colorScheme.onPrimary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                )
+                
+                Spacer(modifier = Modifier.height(spacing.extraSmall))
+                
+                Text(
+                    text = formatTimestamp(message.timestamp),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (message.isFromCurrentUser) {
+                        MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MessageInput(
+    messageText: String,
+    onMessageTextChange: (String) -> Unit,
+    onSendClick: () -> Unit,
+    isSending: Boolean = false,
+    modifier: Modifier = Modifier
+) {
+    val spacing = LocalSpacing.current
+    
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.Bottom,
+        horizontalArrangement = Arrangement.spacedBy(spacing.small)
+    ) {
+        OutlinedTextField(
+            value = messageText,
+            onValueChange = onMessageTextChange,
+            modifier = Modifier.weight(1f),
+            placeholder = {
+                Text(
+                    text = "Type a message...",
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                )
+            },
+            maxLines = 4,
+            shape = RoundedCornerShape(24.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+            )
+        )
+        
+        FloatingActionButton(
+            onClick = if (isSending) { {} } else { onSendClick },
+            modifier = Modifier.size(48.dp),
+            containerColor = if (isSending) MaterialTheme.colorScheme.primary.copy(alpha = 0.6f) else MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary
+        ) {
+            if (isSending) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.onPrimary
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Default.Send,
+                    contentDescription = "Send message",
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+    }
+}
+
+private fun formatTimestamp(timestamp: Long): String {
+    val now = System.currentTimeMillis()
+    val diff = now - timestamp
+    
+    return when {
+        diff < 60000 -> "Just now" // Less than 1 minute
+        diff < 3600000 -> "${diff / 60000}m ago" // Less than 1 hour
+        diff < 86400000 -> "${diff / 3600000}h ago" // Less than 1 day
+        else -> "${diff / 86400000}d ago" // More than 1 day
+    }
 }
