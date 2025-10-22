@@ -79,9 +79,15 @@ export class TaskModel {
 
   async create(taskData: Partial<ITask>): Promise<ITask> {
     try {
-      return await this.task.create(taskData);
+      console.log('🗄️ TaskModel.create() called with data:', JSON.stringify(taskData, null, 2));
+      const result = await this.task.create(taskData);
+      console.log('✅ TaskModel.create() successful, created task:', result._id.toString());
+      console.log('📋 Created task details:', JSON.stringify(result, null, 2));
+      return result;
     } catch (error) {
-      console.error('Error creating task:', error);
+      console.error('❌ TaskModel.create() error:', error);
+      console.error('Error details:', error.message);
+      console.error('Error stack:', error.stack);
       throw new Error('Failed to create task');
     }
   }
@@ -99,12 +105,17 @@ export class TaskModel {
 
   async findByProjectId(projectId: mongoose.Types.ObjectId): Promise<ITask[]> {
     try {
-      return await this.task.find({ projectId })
+      console.log('🔍 TaskModel.findByProjectId() called for project:', projectId.toString());
+      const tasks = await this.task.find({ projectId })
         .populate('assignees', 'name email profilePicture')
         .populate('createdBy', 'name email profilePicture')
         .sort({ createdAt: -1 });
+      console.log('✅ TaskModel.findByProjectId() found', tasks.length, 'tasks');
+      console.log('📋 Tasks details:', JSON.stringify(tasks, null, 2));
+      return tasks;
     } catch (error) {
-      console.error('Error finding tasks by project:', error);
+      console.error('❌ TaskModel.findByProjectId() error:', error);
+      console.error('Error details:', error.message);
       throw new Error('Failed to find tasks');
     }
   }

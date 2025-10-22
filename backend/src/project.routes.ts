@@ -36,10 +36,18 @@ const createTaskSchema = z.object({
   deadline: z.string().optional()
 });
 
+// Task routes
 router.post(
   '/:projectId/tasks',
   authenticateToken,
+  validateBody(createTaskSchema),
   (req, res) => taskController.createTask(req, res)
+);
+
+router.get(
+  '/:projectId/tasks',
+  authenticateToken,
+  (req, res) => taskController.getTasksByProject(req, res)
 );
 
 // Routes

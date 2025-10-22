@@ -5,6 +5,7 @@ import com.cpen321.usermanagement.data.remote.api.ExpenseInterface
 import com.cpen321.usermanagement.data.remote.api.HobbyInterface
 import com.cpen321.usermanagement.data.remote.api.ImageInterface
 import com.cpen321.usermanagement.data.remote.api.RetrofitClient
+import com.cpen321.usermanagement.data.remote.api.TaskInterface
 import com.cpen321.usermanagement.data.remote.api.UserInterface
 import dagger.Module
 import dagger.Provides
