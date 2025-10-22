@@ -44,3 +44,16 @@ data class AddResourceRequest(
     val resourceName: String,
     val link: String
 )
+
+data class ChatMessage(
+    val id: String,
+    val content: String,
+    val senderName: String,
+    val senderId: String,
+    val timestamp: Long,
+    val projectId: String
+)
+
+data class SendMessageRequest(
+    val content: String
+)

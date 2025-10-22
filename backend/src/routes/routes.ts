@@ -2,6 +2,7 @@ import { Router } from 'express';
 
 import { authenticateToken } from '../middleware/auth.middleware';
 import authRoutes from './auth.routes';
+import chatRoutes from './chat.routes';
 import hobbiesRoutes from './hobbies.routes';
 import mediaRoutes from './media.routes';
 import projectRoutes from './project.routes';
@@ -19,6 +20,8 @@ router.use('/user', authenticateToken, usersRoutes);
 router.use('/media', authenticateToken, mediaRoutes);
 
 router.use('/projects', authenticateToken, projectRoutes);
+
+router.use('/chat', authenticateToken, chatRoutes);
 
 router.use('/expenses', authenticateToken, expenseRoutes);
 

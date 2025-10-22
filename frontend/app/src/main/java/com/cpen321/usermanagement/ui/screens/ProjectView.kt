@@ -61,6 +61,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.cpen321.usermanagement.R
+import com.cpen321.usermanagement.data.remote.dto.ChatMessage as BackendChatMessage
 import com.cpen321.usermanagement.data.remote.dto.Resource
 import com.cpen321.usermanagement.ui.navigation.NavigationStateManager
 import com.cpen321.usermanagement.ui.theme.LocalSpacing
@@ -88,7 +89,9 @@ data class ChatMessage(
     val id: String,
     val content: String,
     val senderName: String,
+    val senderId: String,
     val timestamp: Long,
+    val projectId: String,
     val isFromCurrentUser: Boolean = false
 )
 
@@ -270,8 +273,8 @@ private fun ProjectBody(
     var paidByExpanded by remember { mutableStateOf(false) }
     var selectedUsersForSplit by remember { mutableStateOf(setOf<String>()) }
     
-    // Chat state
-    var chatMessages by remember { mutableStateOf(listOf<ChatMessage>()) }
+    // Chat state - now using backend messages from ViewModel
+    val backendMessages = uiState.messages
     
     // Fetch user names for project members
     var userIdToNameMap by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
@@ -298,6 +301,17 @@ private fun ProjectBody(
                             }
                     }
                 }
+            }
+        }
+    }
+    
+    // Load messages when Chat tab is selected
+    androidx.compose.runtime.LaunchedEffect(selectedTab, currentProject?.id) {
+        if (selectedTab == "Chat" && currentProject != null) {
+            try {
+                projectViewModel.loadMessages(currentProject.id)
+            } catch (e: Exception) {
+                Log.e("ProjectView", "Error loading messages for project ${currentProject.id}", e)
             }
         }
     }
@@ -872,18 +886,28 @@ private fun ProjectBody(
                 }
                 "Chat" -> {
                     ChatScreen(
-                        messages = chatMessages,
-                        onSendMessage = { message ->
-                            // Add new message to the list
-                            val newMessage = ChatMessage(
-                                id = System.currentTimeMillis().toString(),
-                                content = message,
-                                senderName = "You", // TODO: Get actual user name
-                                timestamp = System.currentTimeMillis(),
-                                isFromCurrentUser = true
+                        messages = backendMessages?.map { backendMessage ->
+                            ChatMessage(
+                                id = backendMessage.id,
+                                content = backendMessage.content,
+                                senderName = backendMessage.senderName,
+                                senderId = backendMessage.senderId,
+                                timestamp = backendMessage.timestamp,
+                                projectId = backendMessage.projectId,
+                                isFromCurrentUser = false // TODO: Compare with current user ID
                             )
-                            chatMessages = chatMessages + newMessage
-                        }
+                        } ?: emptyList(),
+                        onSendMessage = { message ->
+                            currentProject?.let { project ->
+                                try {
+                                    projectViewModel.sendMessage(project.id, message)
+                                } catch (e: Exception) {
+                                    Log.e("ProjectView", "Error sending message", e)
+                                }
+                            }
+                        },
+                        isLoading = uiState.isLoadingMessages,
+                        isSending = uiState.isSending
                     )
                 }
                 "Expense" -> {
@@ -1482,18 +1506,25 @@ private fun AddResourceDialog(
 fun ChatScreen(
     messages: List<ChatMessage> = emptyList(),
     onSendMessage: (String) -> Unit = {},
+    isLoading: Boolean = false,
+    isSending: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val spacing = LocalSpacing.current
     var messageText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
+    
 
     // Auto-scroll to bottom when new messages arrive
     LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty()) {
-            coroutineScope.launch {
-                listState.animateScrollToItem(messages.size - 1)
+        if (messages.isNotEmpty() && messages.size > 0) {
+            try {
+                coroutineScope.launch {
+                    listState.animateScrollToItem(messages.size - 1)
+                }
+            } catch (e: Exception) {
+                Log.e("ChatScreen", "Error scrolling to bottom", e)
             }
         }
     }
@@ -1502,22 +1533,36 @@ fun ChatScreen(
         modifier = modifier.fillMaxSize()
     ) {
         // Messages List
-        LazyColumn(
-            state = listState,
+        Box(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .padding(horizontal = spacing.medium),
-            verticalArrangement = Arrangement.spacedBy(spacing.small),
-            contentPadding = PaddingValues(vertical = spacing.medium)
         ) {
-            if (messages.isEmpty()) {
-                item {
-                    EmptyChatMessage()
-                }
-            } else {
-                items(messages) { message ->
-                    ChatMessageItem(message = message)
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = spacing.medium),
+                verticalArrangement = Arrangement.spacedBy(spacing.small),
+                contentPadding = PaddingValues(vertical = spacing.medium)
+            ) {
+                if (isLoading) {
+                    item {
+                        Box(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator()
+                        }
+                    }
+                } else if (messages.isEmpty()) {
+                    item {
+                        EmptyChatMessage()
+                    }
+                } else {
+                    items(messages) { message ->
+                        ChatMessageItem(message = message)
+                    }
                 }
             }
         }
@@ -1527,11 +1572,12 @@ fun ChatScreen(
             messageText = messageText,
             onMessageTextChange = { messageText = it },
             onSendClick = {
-                if (messageText.isNotBlank()) {
+                if (messageText.isNotBlank() && !isSending) {
                     onSendMessage(messageText.trim())
                     messageText = ""
                 }
             },
+            isSending = isSending,
             modifier = Modifier.padding(spacing.medium)
         )
     }
@@ -1629,6 +1675,7 @@ private fun MessageInput(
     messageText: String,
     onMessageTextChange: (String) -> Unit,
     onSendClick: () -> Unit,
+    isSending: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val spacing = LocalSpacing.current
@@ -1657,16 +1704,24 @@ private fun MessageInput(
         )
         
         FloatingActionButton(
-            onClick = onSendClick,
+            onClick = if (isSending) { {} } else { onSendClick },
             modifier = Modifier.size(48.dp),
-            containerColor = MaterialTheme.colorScheme.primary,
+            containerColor = if (isSending) MaterialTheme.colorScheme.primary.copy(alpha = 0.6f) else MaterialTheme.colorScheme.primary,
             contentColor = MaterialTheme.colorScheme.onPrimary
         ) {
-            Icon(
-                imageVector = Icons.Default.Send,
-                contentDescription = "Send message",
-                modifier = Modifier.size(20.dp)
-            )
+            if (isSending) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.onPrimary
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Default.Send,
+                    contentDescription = "Send message",
+                    modifier = Modifier.size(20.dp)
+                )
+            }
         }
     }
 }
