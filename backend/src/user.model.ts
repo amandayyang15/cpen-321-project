@@ -163,6 +163,24 @@ export class UserModel {
     }
   }
 
+  async findByName(name: string): Promise<IUser | null> {
+    try {
+      console.log('🔍 UserModel.findByName() called for name:', name);
+      const user = await this.user.findOne({ name: { $regex: new RegExp(`^${name}$`, 'i') } });
+      
+      if (!user) {
+        console.log('❌ User not found with name:', name);
+        return null;
+      }
+      
+      console.log('✅ User found:', user.name, 'ID:', user._id.toString());
+      return user;
+    } catch (error) {
+      console.error('❌ Error finding user by name:', error);
+      throw new Error('Failed to find user by name');
+    }
+  }
+
   async addOwnedProject(userId: mongoose.Types.ObjectId, projectId: mongoose.Types.ObjectId): Promise<IUser | null> {
     try {
       return await this.user.findByIdAndUpdate(
@@ -227,6 +245,18 @@ export class UserModel {
     } catch (error) {
       console.error('Error getting user projects:', error);
       throw new Error('Failed to get user projects');
+    }
+  }
+
+  async getAllUsers(): Promise<IUser[]> {
+    try {
+      console.log('🔍 UserModel.getAllUsers() called');
+      const users = await this.user.find({}).select('name email _id');
+      console.log('✅ UserModel.getAllUsers() found', users.length, 'users');
+      return users;
+    } catch (error) {
+      console.error('❌ UserModel.getAllUsers() error:', error);
+      throw new Error('Failed to get all users');
     }
   }
 }

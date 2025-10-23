@@ -4,11 +4,17 @@ import { authenticateToken } from './auth.middleware';
 
 const router = Router({ mergeParams: true });
 
-// Debug route to get all tasks
+// Debug routes
 router.get(
   '/debug/all',
   authenticateToken,
   (req, res) => taskController.getAllTasks(req, res)
+);
+
+router.get(
+  '/debug/users',
+  authenticateToken,
+  (req, res) => taskController.getAllUsers(req, res)
 );
 
 // Individual task routes

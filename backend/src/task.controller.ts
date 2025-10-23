@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import { taskModel } from './task.model';
+import { userModel } from './user.model';
 import logger from './logger.util';
 
 export class TaskController {
@@ -33,12 +34,10 @@ export class TaskController {
       // Validate ObjectId formats
       try {
         const projectObjectId = new mongoose.Types.ObjectId(projectId);
-        const assigneeObjectId = new mongoose.Types.ObjectId(assignee);
         const userObjectId = new mongoose.Types.ObjectId(userId);
         
-        logger.info('✅ ObjectIds validated successfully');
+        logger.info('✅ Project and User ObjectIds validated successfully');
         logger.info('Project ObjectId:', projectObjectId.toString());
-        logger.info('Assignee ObjectId:', assigneeObjectId.toString());
         logger.info('User ObjectId:', userObjectId.toString());
       } catch (objectIdError) {
         logger.error('❌ Invalid ObjectId format:', objectIdError);
@@ -46,11 +45,52 @@ export class TaskController {
         return;
       }
 
+      // Find assignee by ID (since frontend sends user ID)
+      let assigneeObjectId: mongoose.Types.ObjectId;
+      try {
+        logger.info('🔍 Looking up assignee by ID:', assignee);
+        
+        // First try to parse as ObjectId to see if it's already an ID
+        try {
+          assigneeObjectId = new mongoose.Types.ObjectId(assignee);
+          logger.info('✅ Assignee ID parsed successfully:', assigneeObjectId.toString());
+        } catch (objectIdError) {
+          // If not a valid ObjectId, try to find by name (fallback)
+          logger.info('🔍 Not a valid ObjectId, trying to find by name:', assignee);
+          const assigneeUser = await userModel.findByName(assignee);
+          
+          if (!assigneeUser) {
+            logger.error('❌ Assignee not found by name:', assignee);
+            res.status(400).json({ success: false, message: `User "${assignee}" not found` });
+            return;
+          }
+          
+          assigneeObjectId = assigneeUser._id;
+          logger.info('✅ Assignee found by name:', assigneeUser.name, 'ID:', assigneeObjectId.toString());
+        }
+      } catch (userLookupError) {
+        logger.error('❌ Error looking up assignee:', userLookupError);
+        res.status(400).json({ success: false, message: 'Failed to find assignee' });
+        return;
+      }
+
+      // Map frontend status values to backend schema values
+      const statusMapping: { [key: string]: 'not_started' | 'in_progress' | 'completed' | 'blocked' | 'backlog' } = {
+        'Not Started': 'not_started',
+        'In Progress': 'in_progress',
+        'Done': 'completed',
+        'Blocked': 'blocked',
+        'Backlog': 'backlog'
+      };
+      
+      const mappedStatus = statusMapping[status] || 'not_started';
+      logger.info('📝 Status mapping:', status, '->', mappedStatus);
+
       const taskData = {
         projectId: new mongoose.Types.ObjectId(projectId),
         title: name,
-        assignees: [new mongoose.Types.ObjectId(assignee)],
-        status,
+        assignees: [assigneeObjectId],
+        status: mappedStatus,
         createdBy: new mongoose.Types.ObjectId(userId),
         deadline: deadline ? new Date(deadline) : undefined,
       };
@@ -66,7 +106,9 @@ export class TaskController {
       res.status(201).json({ success: true, data: task });
     } catch (error) {
       logger.error('❌ Error creating task:', error);
-      logger.error('Error stack:', error.stack);
+      if (error instanceof Error) {
+        logger.error('Error stack:', error.stack);
+      }
       res.status(500).json({ success: false, message: 'Failed to create task' });
     }
   }
@@ -199,7 +241,7 @@ export class TaskController {
       }
 
       // Get all tasks from database (for debugging)
-      const allTasks = await taskModel.task.find({}).populate('projectId', 'name').populate('assignees', 'name').populate('createdBy', 'name');
+      const allTasks = await taskModel.getAllTasks();
       
       logger.info('🔍 All tasks in database:', allTasks.length);
       logger.info('📋 Tasks details:', JSON.stringify(allTasks, null, 2));
@@ -208,6 +250,31 @@ export class TaskController {
     } catch (error) {
       logger.error('❌ Error getting all tasks:', error);
       res.status(500).json({ success: false, message: 'Failed to get all tasks' });
+    }
+  }
+
+  async getAllUsers(req: Request, res: Response): Promise<void> {
+    try {
+      const userId = req.user?.id;
+
+      logger.info('=== GET ALL USERS DEBUG REQUEST ===');
+      logger.info('User ID:', userId);
+
+      if (!userId) {
+        res.status(401).json({ message: 'User not authenticated' });
+        return;
+      }
+
+      // Get all users from database (for debugging)
+      const allUsers = await userModel.getAllUsers();
+      
+      logger.info('🔍 All users in database:', allUsers.length);
+      logger.info('👥 Users details:', JSON.stringify(allUsers, null, 2));
+      
+      res.status(200).json({ success: true, data: allUsers, count: allUsers.length });
+    } catch (error) {
+      logger.error('❌ Error getting all users:', error);
+      res.status(500).json({ success: false, message: 'Failed to get all users' });
     }
   }
 }

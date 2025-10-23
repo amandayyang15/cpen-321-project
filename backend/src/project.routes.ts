@@ -30,9 +30,9 @@ const addResourceSchema = z.object({
 });
 
 const createTaskSchema = z.object({
-  name: z.string().min(1),
-  assignee: z.string().min(1),
-  status: z.string().min(1),
+  name: z.string().min(1, 'Task name is required'),
+  assignee: z.string().min(1, 'Assignee username is required'),
+  status: z.string().min(1, 'Status is required'),
   deadline: z.string().optional()
 });
 

@@ -28,6 +28,11 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -214,6 +219,8 @@ private fun ProjectBody(
     var taskProgress by remember { mutableStateOf("In Progress") }
     var deadline by remember { mutableStateOf("") }
     var taskProgressExpanded by remember { mutableStateOf(false) }
+    var assigneeExpanded by remember { mutableStateOf(false) }
+    var selectedDate by remember { mutableStateOf<Long?>(null) }
 
     // Resource state
     var showAddResourceDialog by remember { mutableStateOf(false) }
@@ -253,6 +260,16 @@ private fun ProjectBody(
         if (selectedTab == "Expense" && currentProject != null) {
             Log.d("ProjectView", "Loading expenses for project: ${currentProject.id}")
             projectViewModel.loadExpenses(currentProject.id)
+        }
+    }
+
+    // Note: Tasks are now project-specific, so no need to clear when switching projects
+
+    // Load tasks when switching to Task Board tab or when project changes
+    LaunchedEffect(selectedTab, currentProject?.id) {
+        if (selectedTab == "Task" && currentProject != null) {
+            Log.d("ProjectView", "Loading tasks for project: ${currentProject.id}")
+            projectViewModel.loadProjectTasks(currentProject.id)
         }
     }
 
@@ -376,11 +393,52 @@ private fun ProjectBody(
             }
         }
 
-        val tasks by projectViewModel.tasks.collectAsState()
+        // Get tasks for current project and filter to ensure only current project tasks are shown
+        val allTasks = currentProject?.let { projectViewModel.getTasksForProject(it.id) } ?: emptyList()
+        val tasks = allTasks.filter { task -> 
+            task.projectId == currentProject?.id 
+        }
 
         if (selectedTab == "Task") {
             Column {
                 Text("Task Board", style = MaterialTheme.typography.titleLarge)
+                
+                // Show error message if present
+                if (uiState.errorMessage != null) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer
+                        )
+                    ) {
+                        Text(
+                            text = uiState.errorMessage!!,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.padding(8.dp)
+                        )
+                    }
+                }
+                
+                // Show success message if present
+                if (uiState.message != null && uiState.message!!.contains("Task")) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer
+                        )
+                    ) {
+                        Text(
+                            text = uiState.message!!,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.padding(8.dp)
+                        )
+                    }
+                }
+                
                 if (tasks.isEmpty()) {
                     Text("No tasks yet.")
                 } else {
@@ -872,36 +930,103 @@ private fun ProjectBody(
                     Column(
                         verticalArrangement = Arrangement.spacedBy(spacing.medium)
                     ) {
+                        // Task Name Field
                         OutlinedTextField(
                             value = taskName,
                             onValueChange = { taskName = it },
                             label = { Text("Task Name") },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        OutlinedTextField(
-                            value = assignee,
-                            onValueChange = { assignee = it },
-                            label = { Text("Assignee") },
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            placeholder = { Text("Enter task name") }
                         )
 
-                        // Progress Dropdown
+                        // Assignee Dropdown - Project Members
+                        Text(
+                            text = "Assignee",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(bottom = 4.dp)
+                        )
                         Box {
-                            TextButton(
-                                onClick = { taskProgressExpanded = !taskProgressExpanded },
-                                modifier = Modifier.fillMaxWidth()
+                            OutlinedTextField(
+                                value = assignee,
+                                onValueChange = { },
+                                readOnly = true,
+                                label = { Text("Select Assignee") },
+                                placeholder = { Text("Choose a project member") },
+                                trailingIcon = {
+                                    IconButton(
+                                        onClick = { assigneeExpanded = !assigneeExpanded }
+                                    ) {
+                                        Icon(
+                                            imageVector = if (assigneeExpanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                                            contentDescription = "Dropdown"
+                                        )
+                                    }
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { assigneeExpanded = !assigneeExpanded }
+                            )
+                            DropdownMenu(
+                                expanded = assigneeExpanded,
+                                onDismissRequest = { assigneeExpanded = false }
                             ) {
-                                Text(
-                                    text = taskProgress,
-                                    modifier = Modifier.fillMaxWidth(),
-                                    textAlign = TextAlign.Start
-                                )
+                                allMembers.forEach { member ->
+                                    DropdownMenuItem(
+                                        text = { 
+                                            Column {
+                                                Text(
+                                                    text = member.userId,
+                                                    style = MaterialTheme.typography.bodyMedium
+                                                )
+                                                Text(
+                                                    text = member.role.capitalize(),
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                                )
+                                            }
+                                        },
+                                        onClick = {
+                                            assignee = member.userId
+                                            assigneeExpanded = false
+                                        }
+                                    )
+                                }
                             }
+                        }
+
+                        // Status Dropdown - Clear UI
+                        Text(
+                            text = "Status",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(bottom = 4.dp)
+                        )
+                        Box {
+                            OutlinedTextField(
+                                value = taskProgress,
+                                onValueChange = { },
+                                readOnly = true,
+                                label = { Text("Select Status") },
+                                trailingIcon = {
+                                    IconButton(
+                                        onClick = { taskProgressExpanded = !taskProgressExpanded }
+                                    ) {
+                                        Icon(
+                                            imageVector = if (taskProgressExpanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                                            contentDescription = "Dropdown"
+                                        )
+                                    }
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { taskProgressExpanded = !taskProgressExpanded }
+                            )
                             DropdownMenu(
                                 expanded = taskProgressExpanded,
                                 onDismissRequest = { taskProgressExpanded = false }
                             ) {
-                                listOf("In Progress", "Done", "Backlog", "Blocked").forEach { option ->
+                                listOf("In Progress", "Done", "Backlog", "Blocked", "Not Started").forEach { option ->
                                     DropdownMenuItem(
                                         text = { Text(option) },
                                         onClick = {
@@ -913,24 +1038,89 @@ private fun ProjectBody(
                             }
                         }
 
+                        // Date Picker for Deadline
+                        Text(
+                            text = "Deadline",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(bottom = 4.dp)
+                        )
                         OutlinedTextField(
-                            value = deadline,
-                            onValueChange = { deadline = it },
-                            label = { Text("Deadline") },
-                            modifier = Modifier.fillMaxWidth()
+                            value = if (selectedDate != null) {
+                                val date = java.util.Date(selectedDate!!)
+                                val formatter = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+                                formatter.format(date)
+                            } else "",
+                            onValueChange = { },
+                            readOnly = true,
+                            label = { Text("Select Date") },
+                            trailingIcon = {
+                                IconButton(
+                                    onClick = {
+                                        // Show date picker
+                                        val datePickerDialog = android.app.DatePickerDialog(
+                                            context,
+                                            { _, year, month, dayOfMonth ->
+                                                val calendar = java.util.Calendar.getInstance()
+                                                calendar.set(year, month, dayOfMonth)
+                                                selectedDate = calendar.timeInMillis
+                                                deadline = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(calendar.time)
+                                            },
+                                            java.util.Calendar.getInstance().get(java.util.Calendar.YEAR),
+                                            java.util.Calendar.getInstance().get(java.util.Calendar.MONTH),
+                                            java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_MONTH)
+                                        )
+                                        datePickerDialog.show()
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.DateRange,
+                                        contentDescription = "Date Picker"
+                                    )
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    // Show date picker
+                                    val datePickerDialog = android.app.DatePickerDialog(
+                                        context,
+                                        { _, year, month, dayOfMonth ->
+                                            val calendar = java.util.Calendar.getInstance()
+                                            calendar.set(year, month, dayOfMonth)
+                                            selectedDate = calendar.timeInMillis
+                                            deadline = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(calendar.time)
+                                        },
+                                        java.util.Calendar.getInstance().get(java.util.Calendar.YEAR),
+                                        java.util.Calendar.getInstance().get(java.util.Calendar.MONTH),
+                                        java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_MONTH)
+                                    )
+                                    datePickerDialog.show()
+                                }
                         )
                     }
                 },
                 confirmButton = {
                     Button(
                         onClick = {
-                            Log.d("ProjectView", "Task created: $taskName, $assignee, $taskProgress, $deadline")
-                            Toast.makeText(context, "Task created: $taskName", Toast.LENGTH_SHORT).show()
+                            Log.d("ProjectView", "Creating task: $taskName, $assignee, $taskProgress, $deadline")
+                            currentProject?.let { project ->
+                                projectViewModel.createTask(
+                                    projectId = project.id,
+                                    name = taskName,
+                                    assignee = assignee,
+                                    status = taskProgress,
+                                    deadline = deadline.takeIf { it.isNotBlank() }
+                                )
+                            }
                             showCreateTaskDialog = false
                             taskName = ""
                             assignee = ""
                             taskProgress = "In Progress"
                             deadline = ""
+                            selectedDate = null
+                            assigneeExpanded = false
+                            taskProgressExpanded = false
                         }
                     ) {
                         Text("Create")
@@ -944,6 +1134,9 @@ private fun ProjectBody(
                             assignee = ""
                             taskProgress = "In Progress"
                             deadline = ""
+                            selectedDate = null
+                            assigneeExpanded = false
+                            taskProgressExpanded = false
                         }
                     ) {
                         Text("Cancel")

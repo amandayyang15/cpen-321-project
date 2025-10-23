@@ -55,16 +55,115 @@ class ProjectViewModel @Inject constructor(
         loadUserProjects()
     }
 
-    private val _tasks = MutableStateFlow<List<Task>>(emptyList())
-    val tasks: StateFlow<List<Task>> = _tasks
+    // Store tasks per project ID
+    private val _tasksByProject = MutableStateFlow<Map<String, List<Task>>>(emptyMap())
+    val tasksByProject: StateFlow<Map<String, List<Task>>> = _tasksByProject
+    
+    // Get tasks for current project
+    fun getTasksForProject(projectId: String): List<Task> {
+        return _tasksByProject.value[projectId] ?: emptyList()
+    }
+    
+    fun clearTasks() {
+        Log.d(TAG, "Clearing all tasks")
+        _tasksByProject.value = emptyMap()
+    }
+    
+    fun clearTasksForProject(projectId: String) {
+        Log.d(TAG, "Clearing tasks for project: $projectId")
+        val currentTasks = _tasksByProject.value.toMutableMap()
+        currentTasks.remove(projectId)
+        _tasksByProject.value = currentTasks
+    }
 
     fun loadProjectTasks(projectId: String) {
         viewModelScope.launch {
             try {
+                Log.d(TAG, "Loading tasks for project: $projectId")
                 val fetchedTasks = taskRepository.getProjectTasks(projectId)
-                _tasks.value = fetchedTasks
+                
+                // Validate that all tasks belong to the specified project
+                val validTasks = fetchedTasks.filter { task ->
+                    task.projectId == projectId
+                }
+                
+                if (validTasks.size != fetchedTasks.size) {
+                    Log.w(TAG, "Filtered out ${fetchedTasks.size - validTasks.size} tasks that don't belong to project: $projectId")
+                }
+                
+                // Store tasks for this specific project
+                val currentTasks = _tasksByProject.value.toMutableMap()
+                currentTasks[projectId] = validTasks
+                _tasksByProject.value = currentTasks
+                
+                Log.d(TAG, "Successfully loaded ${validTasks.size} tasks for project: $projectId")
             } catch (e: Exception) {
-                // handle error
+                Log.e(TAG, "Failed to load tasks", e)
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = "Failed to load tasks: ${e.message}"
+                )
+            }
+        }
+    }
+
+    fun createTask(
+        projectId: String,
+        name: String,
+        assignee: String,
+        status: String,
+        deadline: String?
+    ) {
+        if (name.isBlank()) {
+            _uiState.value = _uiState.value.copy(
+                errorMessage = "Task name cannot be empty"
+            )
+            return
+        }
+
+        if (assignee.isBlank()) {
+            _uiState.value = _uiState.value.copy(
+                errorMessage = "Assignee cannot be empty"
+            )
+            return
+        }
+
+        Log.d(TAG, "Creating task: $name for project: $projectId")
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isCreating = true, errorMessage = null)
+
+            try {
+                val task = taskRepository.createTask(projectId, name.trim(), assignee.trim(), status, deadline)
+                Log.d(TAG, "Task created successfully: ${task.id}")
+                
+                // Validate that the created task belongs to the correct project
+                if (task.projectId != projectId) {
+                    Log.e(TAG, "ERROR: Created task belongs to project ${task.projectId} but was created for project $projectId")
+                    _uiState.value = _uiState.value.copy(
+                        isCreating = false,
+                        errorMessage = "Task creation failed: Project ID mismatch"
+                    )
+                    return@launch
+                }
+                
+                // Add task to local state immediately for instant UI update
+                val currentTasks = _tasksByProject.value.toMutableMap()
+                val projectTasks = currentTasks[projectId] ?: emptyList()
+                currentTasks[projectId] = listOf(task) + projectTasks
+                _tasksByProject.value = currentTasks
+                Log.d(TAG, "Task added to local state for project: $projectId")
+                
+                _uiState.value = _uiState.value.copy(
+                    isCreating = false,
+                    message = "Task created successfully"
+                )
+                
+                Log.d(TAG, "Task added to local state. Total tasks: ${_tasks.value.size}")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to create task", e)
+                _uiState.value = _uiState.value.copy(
+                    isCreating = false,
+                    errorMessage = "Failed to create task: ${e.message}"
+                )
             }
         }
     }
