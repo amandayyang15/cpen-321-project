@@ -2,9 +2,11 @@ package com.cpen321.usermanagement.data.remote.api
 
 import com.cpen321.usermanagement.data.remote.dto.ApiResponse
 import com.cpen321.usermanagement.data.remote.dto.AddResourceRequest
+import com.cpen321.usermanagement.data.remote.dto.ChatMessage
 import com.cpen321.usermanagement.data.remote.dto.CreateProjectRequest
 import com.cpen321.usermanagement.data.remote.dto.JoinProjectRequest
 import com.cpen321.usermanagement.data.remote.dto.Project
+import com.cpen321.usermanagement.data.remote.dto.SendMessageRequest
 import com.cpen321.usermanagement.data.remote.dto.UpdateProjectRequest
 import retrofit2.Response
 import retrofit2.http.Body
@@ -41,4 +43,19 @@ interface ProjectInterface {
         @Path("projectId") projectId: String,
         @Body request: AddResourceRequest
     ): Response<ApiResponse<Project>>
+
+    @POST("chat/{projectId}/messages")
+    suspend fun sendMessage(
+        @Path("projectId") projectId: String,
+        @Body request: SendMessageRequest
+    ): Response<ApiResponse<ChatMessage>>
+
+    @GET("chat/{projectId}/messages")
+    suspend fun getMessages(@Path("projectId") projectId: String): Response<ApiResponse<List<ChatMessage>>>
+
+    @DELETE("chat/{projectId}/messages/{messageId}")
+    suspend fun deleteMessage(
+        @Path("projectId") projectId: String,
+        @Path("messageId") messageId: String
+    ): Response<ApiResponse<Unit>>
 }

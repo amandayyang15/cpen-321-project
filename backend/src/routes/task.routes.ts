@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { taskController } from './features/tasks/task.controller';
-import { authenticateToken } from './auth.middleware';
+import { authenticateToken } from '../middleware/auth.middleware';
+import { taskController } from '../features/tasks/task.controller';
 
 const router = Router({ mergeParams: true });
 

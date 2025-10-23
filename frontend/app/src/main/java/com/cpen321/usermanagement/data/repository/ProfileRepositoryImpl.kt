@@ -60,6 +60,33 @@ class ProfileRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun getUserById(userId: String): Result<User> {
+        return try {
+            val response = userInterface.getUserById("", userId) // Auth header is handled by interceptor
+            if (response.isSuccessful && response.body()?.data != null) {
+                Result.success(response.body()!!.data!!.user)
+            } else {
+                val errorBodyString = response.errorBody()?.string()
+                val errorMessage =
+                    parseErrorMessage(errorBodyString, "Failed to fetch user information.")
+                Log.e(TAG, "Failed to get user by ID: $errorMessage")
+                Result.failure(Exception(errorMessage))
+            }
+        } catch (e: java.net.SocketTimeoutException) {
+            Log.e(TAG, "Network timeout while getting user by ID", e)
+            Result.failure(e)
+        } catch (e: java.net.UnknownHostException) {
+            Log.e(TAG, "Network connection failed while getting user by ID", e)
+            Result.failure(e)
+        } catch (e: java.io.IOException) {
+            Log.e(TAG, "IO error while getting user by ID", e)
+            Result.failure(e)
+        } catch (e: retrofit2.HttpException) {
+            Log.e(TAG, "HTTP error while getting user by ID: ${e.code()}", e)
+            Result.failure(e)
+        }
+    }
+
     override suspend fun updateProfile(name: String, bio: String, profilePicture: String?): Result<User> {
         return try {
             val updateRequest = UpdateProfileRequest(name = name, bio = bio, profilePicture = profilePicture)

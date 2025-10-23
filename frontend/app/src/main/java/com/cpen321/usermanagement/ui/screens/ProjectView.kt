@@ -1,6 +1,7 @@
 package com.cpen321.usermanagement.ui.screens
 import retrofit2.http.GET
 import Icon
+import androidx.compose.runtime.collectAsState
 import com.cpen321.usermanagement.data.remote.dto.Task
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -16,7 +17,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -26,24 +34,28 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import android.util.Log
 import androidx.compose.ui.Alignment
@@ -55,14 +67,16 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.cpen321.usermanagement.R
-import com.cpen321.usermanagement.data.remote.dto.Expense
-import com.cpen321.usermanagement.data.remote.dto.Project
-import com.cpen321.usermanagement.data.remote.dto.ProjectMember
+import com.cpen321.usermanagement.data.remote.dto.ChatMessage as BackendChatMessage
 import com.cpen321.usermanagement.data.remote.dto.Resource
 import com.cpen321.usermanagement.ui.navigation.NavigationStateManager
+import com.cpen321.usermanagement.data.remote.dto.ProjectMember
+
 import com.cpen321.usermanagement.ui.theme.LocalSpacing
 import com.cpen321.usermanagement.ui.viewmodels.ProjectViewModel
 import android.widget.Toast
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.platform.LocalContext
 
@@ -71,16 +85,42 @@ import com.cpen321.usermanagement.ui.theme.LocalSpacing
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.coroutineScope
+
+data class Expense(
+    val id: String,
+    val description: String,
+    val amount: Double,
+    val paidBy: String,
+    val splitBetween: List<String>,
+    val date: String,
+    val amountPerPerson: Double
+)
+
+data class ChatMessage(
+    val id: String,
+    val content: String,
+    val senderName: String,
+    val senderId: String,
+    val timestamp: Long,
+    val projectId: String,
+    val isFromCurrentUser: Boolean = false
+)
 
 @Composable
 fun ProjectView(
     navigationStateManager: NavigationStateManager,
     projectViewModel: ProjectViewModel,
+    profileViewModel: com.cpen321.usermanagement.ui.viewmodels.ProfileViewModel,
+    expenseRepository: com.cpen321.usermanagement.data.repository.ExpenseRepository,
     modifier: Modifier = Modifier
 ) {
     ProjectContent(
         navigationStateManager = navigationStateManager,
+        expenseRepository = expenseRepository,
         projectViewModel = projectViewModel,
+        profileViewModel = profileViewModel, // <-- Pass it here
         modifier = modifier
     )
 }
@@ -89,6 +129,8 @@ fun ProjectView(
 private fun ProjectContent(
     navigationStateManager: NavigationStateManager,
     projectViewModel: ProjectViewModel,
+    profileViewModel: com.cpen321.usermanagement.ui.viewmodels.ProfileViewModel,
+    expenseRepository: com.cpen321.usermanagement.data.repository.ExpenseRepository,
     modifier: Modifier = Modifier
 ) {
     val uiState by projectViewModel.uiState.collectAsState()
@@ -112,7 +154,9 @@ private fun ProjectContent(
     ) { paddingValues ->
         ProjectBody(
             paddingValues = paddingValues,
-            projectViewModel = projectViewModel
+            projectViewModel = projectViewModel,
+            profileViewModel = profileViewModel,
+            expenseRepository = expenseRepository
         )
     }
 }
@@ -203,12 +247,18 @@ private fun BackIcon() {
 private fun ProjectBody(
     paddingValues: PaddingValues,
     projectViewModel: ProjectViewModel,
+    profileViewModel: com.cpen321.usermanagement.ui.viewmodels.ProfileViewModel,
+    expenseRepository: com.cpen321.usermanagement.data.repository.ExpenseRepository,
     modifier: Modifier = Modifier
 ) {
     val spacing = LocalSpacing.current
     val context = LocalContext.current
     val uiState by projectViewModel.uiState.collectAsState()
+    val profileUiState by profileViewModel.uiState.collectAsState()
     val currentProject = uiState.selectedProject
+    val currentUser = profileUiState.user
+    val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
+
 
     var progressExpanded by remember { mutableStateOf(false) }
     var selectedProgress by remember { mutableStateOf("In Progress") }
@@ -233,10 +283,11 @@ private fun ProjectBody(
     var removeUserExpanded by remember { mutableStateOf(false) }
 
     // Expense state
+    var expenses by remember { mutableStateOf(listOf<Expense>()) }
     var showCreateExpenseDialog by remember { mutableStateOf(false) }
-    var expenseTitle by remember { mutableStateOf("") }
     var expenseDescription by remember { mutableStateOf("") }
     var expenseAmount by remember { mutableStateOf("") }
+    var expensePaidBy by remember { mutableStateOf("") }
     var paidByExpanded by remember { mutableStateOf(false) }
     var selectedUsersForSplit by remember { mutableStateOf(setOf<String>()) }
 
@@ -252,16 +303,119 @@ private fun ProjectBody(
         projectMembers
     }
 
-    // Get expenses from ViewModel
-    val expenses = uiState.expenses
+    // Chat state - now using backend messages from ViewModel
+    val backendMessages = uiState.messages
 
-    // Load expenses when switching to Expense tab or when project changes
-    LaunchedEffect(selectedTab, currentProject?.id) {
-        if (selectedTab == "Expense" && currentProject != null) {
-            Log.d("ProjectView", "Loading expenses for project: ${currentProject.id}")
-            projectViewModel.loadExpenses(currentProject.id)
+    // Load current user profile
+    LaunchedEffect(Unit) {
+        Log.d("ProjectView", "Loading user profile... Current user in state: ${profileUiState.user?._id}")
+        if (profileUiState.user == null) {
+            profileViewModel.loadProfile()
         }
     }
+
+    // Debug user loading
+    LaunchedEffect(currentUser) {
+        Log.d("ProjectView", "Current user changed: ${currentUser?._id}, name: ${currentUser?.name}")
+    }
+
+    // Re-map messages when user profile is loaded to ensure proper alignment
+    val mappedMessages = remember(backendMessages, currentUser) {
+        Log.d("ProjectView", "Re-mapping messages. Current user: ${currentUser?._id}, Messages count: ${backendMessages?.size ?: 0}")
+        backendMessages?.map { backendMessage ->
+            val isFromCurrentUser = currentUser?._id == backendMessage.senderId
+            Log.d("ProjectView", "Message from ${backendMessage.senderName} (${backendMessage.senderId}) - isFromCurrentUser: $isFromCurrentUser")
+            Log.d("ProjectView", "Comparing: '${currentUser?._id}' == '${backendMessage.senderId}' = ${currentUser?._id == backendMessage.senderId}")
+            Log.d("ProjectView", "Current user ID: '${currentUser?._id}', Sender ID: '${backendMessage.senderId}'")
+
+            // Use the actual comparison result
+            val finalIsFromCurrentUser = isFromCurrentUser
+
+            ChatMessage(
+                id = backendMessage.id,
+                content = backendMessage.content,
+                senderName = backendMessage.senderName,
+                senderId = backendMessage.senderId,
+                timestamp = backendMessage.timestamp,
+                projectId = backendMessage.projectId,
+                isFromCurrentUser = finalIsFromCurrentUser
+            )
+        } ?: emptyList()
+    }
+
+    // Fetch user names for project members
+    var userIdToNameMap by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+
+    // Fetch user names when project changes
+    androidx.compose.runtime.LaunchedEffect(currentProject?.id) {
+        currentProject?.members?.let { members ->
+            val userMap = mutableMapOf<String, String>()
+            // Fetch all users concurrently
+            coroutineScope {
+                members.forEach { member ->
+                    launch {
+                        profileViewModel.getUserById(member.userId)
+                            .onSuccess { user ->
+                                Log.d("ProjectView", "Fetched user: id=${member.userId}, name=${user.name}")
+                                userMap[member.userId] = user.name
+                                userIdToNameMap = userMap.toMap()
+                            }
+                            .onFailure {
+                                // Fallback to user ID if name fetch fails
+                                Log.e("ProjectView", "Failed to fetch user: id=${member.userId}")
+                                userMap[member.userId] = member.userId
+                                userIdToNameMap = userMap.toMap()
+                            }
+                    }
+                }
+            }
+        }
+    }
+
+    // Load messages when Chat tab is selected
+    androidx.compose.runtime.LaunchedEffect(selectedTab, currentProject?.id) {
+        if (selectedTab == "Chat" && currentProject != null) {
+            try {
+                projectViewModel.loadMessages(currentProject.id)
+            } catch (e: Exception) {
+                Log.e("ProjectView", "Error loading messages for project ${currentProject.id}", e)
+            }
+        }
+    }
+
+    // Load expenses when project changes
+    androidx.compose.runtime.LaunchedEffect(currentProject?.id) {
+        currentProject?.let { project ->
+            expenseRepository.getProjectExpenses(project.id)
+                .onSuccess { fetchedExpenses ->
+                    expenses = fetchedExpenses.map { dto ->
+                        Log.d("ProjectView", "Mapping expense DTO: id=${dto.id}, desc=${dto.description}, amount=${dto.amount}, paidBy=${dto.paidBy}, splitBetween=${dto.splitBetween}, perPerson=${dto.amountPerPerson}")
+                        Expense(
+                            id = dto.id,
+                            description = dto.description,
+                            amount = dto.amount,
+                            paidBy = dto.paidBy,
+                            splitBetween = dto.splitBetween,
+                            date = dto.date,
+                            amountPerPerson = dto.amountPerPerson
+                        )
+                    }
+                    Log.d("ProjectView", "Loaded ${expenses.size} expenses for project ${project.id}")
+                    expenses.forEach { exp ->
+                        Log.d("ProjectView", "Expense: desc='${exp.description}', amount=${exp.amount}, paidBy='${exp.paidBy}', splitBetween=${exp.splitBetween}")
+                    }
+                }
+                .onFailure { error ->
+                    Log.e("ProjectView", "Failed to load expenses", error)
+                    Toast.makeText(context, "Failed to load expenses: ${error.message}", Toast.LENGTH_SHORT).show()
+                }
+        }
+    }
+
+    // Get available users with names (fallback to userId if name not loaded yet)
+    val availableUsers = currentProject?.members?.map { member ->
+        userIdToNameMap[member.userId] ?: member.userId
+    } ?: emptyList()
 
     // Note: Tasks are now project-specific, so no need to clear when switching projects
 
@@ -567,21 +721,21 @@ private fun ProjectBody(
                                 .weight(1f)
                                 .padding(horizontal = spacing.small)
                         ) {
-                    val backgroundColor = when (selectedProgress) {
-                        "In Progress" -> Color(0xFFFFEB3B) // Yellow
-                        "Done" -> Color(0xFF4CAF50) // Green
-                        "Backlog" -> Color(0xFFFF9800) // Orange
-                        "Blocked" -> Color(0xFFF44336) // Red
-                        else -> MaterialTheme.colorScheme.surfaceVariant
-                    }
+                            val backgroundColor = when (selectedProgress) {
+                                "In Progress" -> Color(0xFFFFEB3B) // Yellow
+                                "Done" -> Color(0xFF4CAF50) // Green
+                                "Backlog" -> Color(0xFFFF9800) // Orange
+                                "Blocked" -> Color(0xFFF44336) // Red
+                                else -> MaterialTheme.colorScheme.surfaceVariant
+                            }
 
-                    val textColor = when (selectedProgress) {
-                        "In Progress" -> Color.Black
-                        "Done" -> Color.White
-                        "Backlog" -> Color.White
-                        "Blocked" -> Color.White
-                        else -> MaterialTheme.colorScheme.onSurfaceVariant
-                    }
+                            val textColor = when (selectedProgress) {
+                                "In Progress" -> Color.Black
+                                "Done" -> Color.White
+                                "Backlog" -> Color.White
+                                "Blocked" -> Color.White
+                                else -> MaterialTheme.colorScheme.onSurfaceVariant
+                            }
 
                             TextButton(
                                 onClick = { progressExpanded = !progressExpanded },
@@ -592,14 +746,14 @@ private fun ProjectBody(
                                         shape = RoundedCornerShape(4.dp)
                                     )
                             ) {
-                            Text(
-                                text = selectedProgress,
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontSize = MaterialTheme.typography.labelSmall.fontSize * 0.8f
-                                ),
-                                textAlign = TextAlign.Center,
-                                color = textColor
-                            )
+                                Text(
+                                    text = selectedProgress,
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontSize = MaterialTheme.typography.labelSmall.fontSize * 0.8f
+                                    ),
+                                    textAlign = TextAlign.Center,
+                                    color = textColor
+                                )
                             }
                             DropdownMenu(
                                 expanded = progressExpanded,
@@ -875,12 +1029,19 @@ private fun ProjectBody(
                     }
                 }
                 "Chat" -> {
-                    Text(
-                        text = "Chat",
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                        textAlign = TextAlign.Center
+                    ChatScreen(
+                        messages = mappedMessages,
+                        onSendMessage = { message ->
+                            currentProject?.let { project ->
+                                try {
+                                    projectViewModel.sendMessage(project.id, message)
+                                } catch (e: Exception) {
+                                    Log.e("ProjectView", "Error sending message", e)
+                                }
+                            }
+                        },
+                        isLoading = uiState.isLoadingMessages,
+                        isSending = uiState.isSending
                     )
                 }
                 "Expense" -> {
@@ -901,17 +1062,145 @@ private fun ProjectBody(
                             modifier = Modifier.fillMaxWidth().padding(spacing.large)
                         )
                     } else {
+                        // Expense Table Header
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = spacing.small, vertical = spacing.medium)
+                                .background(
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    shape = RoundedCornerShape(4.dp)
+                                )
+                                .padding(spacing.medium),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Description",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier
+                                    .weight(1.5f)
+                                    .padding(horizontal = spacing.small),
+                                textAlign = TextAlign.Center
+                            )
+                            Text(
+                                text = "Amount",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(horizontal = spacing.small),
+                                textAlign = TextAlign.Center
+                            )
+                            Text(
+                                text = "Paid By",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(horizontal = spacing.small),
+                                textAlign = TextAlign.Center
+                            )
+                            Text(
+                                text = "Split Between",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier
+                                    .weight(1.5f)
+                                    .padding(horizontal = spacing.small),
+                                textAlign = TextAlign.Center
+                            )
+                            Text(
+                                text = "Per Person",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(horizontal = spacing.small),
+                                textAlign = TextAlign.Center
+                            )
+                        }
+
+                        // Scrollable Expense Table Rows
                         Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(spacing.medium)
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f)
+                                .verticalScroll(rememberScrollState())
                         ) {
                             expenses.forEach { expense ->
-                                ExpenseCard(
-                                    expense = expense,
-                                    currentProject = currentProject,
-                                    projectViewModel = projectViewModel,
-                                    modifier = Modifier.fillMaxWidth()
-                                )
+                                Log.d("ProjectView", "Rendering expense: paidBy='${expense.paidBy}', splitBetween=${expense.splitBetween}, userIdToNameMap=$userIdToNameMap")
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = spacing.small, vertical = spacing.small)
+                                        .background(
+                                            color = MaterialTheme.colorScheme.surfaceVariant,
+                                            shape = RoundedCornerShape(4.dp)
+                                        )
+                                        .padding(spacing.medium),
+                                    horizontalArrangement = Arrangement.SpaceEvenly,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = expense.description,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier
+                                            .weight(1.5f)
+                                            .padding(horizontal = 4.dp),
+                                        textAlign = TextAlign.Center,
+                                        maxLines = 2
+                                    )
+                                    Text(
+                                        text = "$%.2f".format(expense.amount),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .padding(horizontal = 4.dp),
+                                        textAlign = TextAlign.Center
+                                    )
+                                    Text(
+                                        text = userIdToNameMap[expense.paidBy] ?: expense.paidBy,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .padding(horizontal = 4.dp),
+                                        textAlign = TextAlign.Center,
+                                        maxLines = 2,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = expense.splitBetween.joinToString(", ") { userId ->
+                                            userIdToNameMap[userId] ?: userId
+                                        },
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier
+                                            .weight(1.5f)
+                                            .padding(horizontal = 4.dp),
+                                        textAlign = TextAlign.Center,
+                                        maxLines = 2,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = "$%.2f".format(expense.amountPerPerson),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .padding(horizontal = 4.dp),
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
                             }
                         }
                     }
@@ -1157,74 +1446,85 @@ private fun ProjectBody(
                         verticalArrangement = Arrangement.spacedBy(spacing.medium)
                     ) {
                         OutlinedTextField(
-                            value = expenseTitle,
-                            onValueChange = { expenseTitle = it },
-                            label = { Text("Title") },
-                            modifier = Modifier.fillMaxWidth(),
-                            placeholder = { Text("e.g., Team Lunch") }
-                        )
-
-                        OutlinedTextField(
                             value = expenseDescription,
                             onValueChange = { expenseDescription = it },
-                            label = { Text("Description (optional)") },
-                            modifier = Modifier.fillMaxWidth(),
-                            placeholder = { Text("e.g., Lunch at restaurant") }
+                            label = { Text("Description") },
+                            modifier = Modifier.fillMaxWidth()
                         )
 
                         OutlinedTextField(
                             value = expenseAmount,
                             onValueChange = { expenseAmount = it },
                             label = { Text("Amount ($)") },
-                            modifier = Modifier.fillMaxWidth(),
-                            placeholder = { Text("0.00") }
+                            modifier = Modifier.fillMaxWidth()
                         )
 
-                        // Split Between Multi-select
+                        // Paid By Dropdown
                         Text(
-                            text = "Split between (select users):",
+                            text = "Paid By:",
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Medium
                         )
+                        Box {
+                            TextButton(
+                                onClick = { paidByExpanded = !paidByExpanded },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    text = expensePaidBy.ifEmpty { "Select who paid" },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    textAlign = TextAlign.Start
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = paidByExpanded,
+                                onDismissRequest = { paidByExpanded = false }
+                            ) {
+                                availableUsers.forEach { user ->
+                                    DropdownMenuItem(
+                                        text = { Text(user) },
+                                        onClick = {
+                                            expensePaidBy = user
+                                            paidByExpanded = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
 
-                        if (allMembers.isEmpty()) {
-                            Text(
-                                text = "No members in this project",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.error
-                            )
-                        } else {
-                            Column {
-                                allMembers.forEach { member ->
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Checkbox(
-                                            checked = selectedUsersForSplit.contains(member.userId),
-                                            onCheckedChange = { isChecked ->
-                                                selectedUsersForSplit = if (isChecked) {
-                                                    selectedUsersForSplit + member.userId
-                                                } else {
-                                                    selectedUsersForSplit - member.userId
-                                                }
+                        // Split Between Multi-select
+                        Text(
+                            text = "Split between:",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Column {
+                            availableUsers.forEach { user ->
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Checkbox(
+                                        checked = selectedUsersForSplit.contains(user),
+                                        onCheckedChange = { isChecked ->
+                                            selectedUsersForSplit = if (isChecked) {
+                                                selectedUsersForSplit + user
+                                            } else {
+                                                selectedUsersForSplit - user
                                             }
-                                        )
-                                        Text(
-                                            text = "${if (member.role == "owner") "👑 " else ""}User ${member.userId.take(8)}",
-                                            modifier = Modifier.padding(start = spacing.small)
-                                        )
-                                    }
+                                        }
+                                    )
+                                    Text(
+                                        text = user,
+                                        modifier = Modifier.padding(start = spacing.small)
+                                    )
                                 }
                             }
                         }
 
                         if (selectedUsersForSplit.isNotEmpty()) {
-                            val amount = expenseAmount.toDoubleOrNull() ?: 0.0
-                            val amountPerPerson = if (selectedUsersForSplit.isNotEmpty())
-                                amount / selectedUsersForSplit.size else 0.0
                             Text(
-                                text = "${selectedUsersForSplit.size} users selected • $${String.format("%.2f", amountPerPerson)} each",
+                                text = "Selected: ${selectedUsersForSplit.joinToString(", ")}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.primary
                             )
@@ -1235,45 +1535,56 @@ private fun ProjectBody(
                     Button(
                         onClick = {
                             val amount = expenseAmount.toDoubleOrNull()
-                            Log.d("ProjectView", "=== CREATE EXPENSE BUTTON CLICKED ===")
-                            Log.d("ProjectView", "Title: '$expenseTitle'")
-                            Log.d("ProjectView", "Description: '$expenseDescription'")
-                            Log.d("ProjectView", "Amount string: '$expenseAmount'")
-                            Log.d("ProjectView", "Amount parsed: $amount")
-                            Log.d("ProjectView", "Selected users: $selectedUsersForSplit")
-                            Log.d("ProjectView", "Current project: ${currentProject?.id}")
-                            Log.d("ProjectView", "All members: ${allMembers.map { it.userId }}")
-
-                            if (expenseTitle.isNotBlank() &&
+                            if (expenseDescription.isNotBlank() &&
                                 amount != null && amount > 0 &&
+                                expensePaidBy.isNotBlank() &&
                                 selectedUsersForSplit.isNotEmpty() &&
                                 currentProject != null) {
 
-                                Log.d("ProjectView", "Validation passed - calling createExpense")
-                                projectViewModel.createExpense(
-                                    projectId = currentProject.id,
-                                    title = expenseTitle,
-                                    description = expenseDescription.ifBlank { null },
-                                    amount = amount,
-                                    splitUserIds = selectedUsersForSplit.toList()
-                                )
+                                // Map names back to user IDs
+                                val nameToIdMap = userIdToNameMap.entries.associate { it.value to it.key }
+                                val paidByUserId = nameToIdMap[expensePaidBy] ?: expensePaidBy
+                                val splitBetweenUserIds = selectedUsersForSplit.map { name ->
+                                    nameToIdMap[name] ?: name
+                                }
 
-                                Log.d("ProjectView", "Expense creation call completed")
-                                Toast.makeText(context, "Expense added: $expenseTitle", Toast.LENGTH_SHORT).show()
+                                // Save expense to database
+                                coroutineScope.launch {
+                                    expenseRepository.createExpense(
+                                        projectId = currentProject.id,
+                                        description = expenseDescription,
+                                        amount = amount,
+                                        paidBy = paidByUserId,
+                                        splitBetween = splitBetweenUserIds
+                                    ).onSuccess { createdExpense ->
+                                        // Add to local state
+                                        val newExpense = Expense(
+                                            id = createdExpense.id,
+                                            description = createdExpense.description,
+                                            amount = createdExpense.amount,
+                                            paidBy = createdExpense.paidBy,
+                                            splitBetween = createdExpense.splitBetween,
+                                            date = createdExpense.date,
+                                            amountPerPerson = createdExpense.amountPerPerson
+                                        )
+                                        expenses = expenses + newExpense
 
-                                // Reset form
-                                showCreateExpenseDialog = false
-                                expenseTitle = ""
-                                expenseDescription = ""
-                                expenseAmount = ""
-                                selectedUsersForSplit = setOf()
+                                        Log.d("ProjectView", "Expense created and saved: $newExpense")
+                                        Toast.makeText(context, "Expense added: $expenseDescription", Toast.LENGTH_SHORT).show()
+
+                                        // Reset form
+                                        showCreateExpenseDialog = false
+                                        expenseDescription = ""
+                                        expenseAmount = ""
+                                        expensePaidBy = ""
+                                        selectedUsersForSplit = setOf()
+                                    }.onFailure { error ->
+                                        Log.e("ProjectView", "Failed to create expense", error)
+                                        Toast.makeText(context, "Failed to create expense: ${error.message}", Toast.LENGTH_LONG).show()
+                                    }
+                                }
                             } else {
-                                Log.e("ProjectView", "Validation failed!")
-                                Log.e("ProjectView", "  Title blank? ${expenseTitle.isBlank()}")
-                                Log.e("ProjectView", "  Amount null or <= 0? ${amount == null || amount <= 0}")
-                                Log.e("ProjectView", "  No users selected? ${selectedUsersForSplit.isEmpty()}")
-                                Log.e("ProjectView", "  No project? ${currentProject == null}")
-                                Toast.makeText(context, "Please fill all required fields correctly", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Please fill all fields correctly", Toast.LENGTH_SHORT).show()
                             }
                         }
                     ) {
@@ -1284,9 +1595,9 @@ private fun ProjectBody(
                     TextButton(
                         onClick = {
                             showCreateExpenseDialog = false
-                            expenseTitle = ""
                             expenseDescription = ""
                             expenseAmount = ""
+                            expensePaidBy = ""
                             selectedUsersForSplit = setOf()
                         }
                     ) {
@@ -1331,48 +1642,7 @@ private fun ProjectBody(
     }
 }
 
-@Composable
-private fun ResourceItem(
-    resource: Resource,
-    modifier: Modifier = Modifier
-) {
-    val spacing = LocalSpacing.current
-    val context = LocalContext.current
 
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = spacing.small, vertical = spacing.extraSmall)
-            .background(
-                color = MaterialTheme.colorScheme.primaryContainer,
-                shape = RoundedCornerShape(8.dp)
-            )
-            .padding(spacing.medium)
-    ) {
-        Column {
-            Text(
-                text = resource.resourceName,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                fontWeight = FontWeight.Medium
-            )
-            Spacer(modifier = Modifier.height(spacing.extraSmall))
-            Text(
-                text = resource.link,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.clickable {
-                    try {
-                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(resource.link))
-                        context.startActivity(intent)
-                    } catch (e: Exception) {
-                        Toast.makeText(context, "Could not open link", Toast.LENGTH_SHORT).show()
-                    }
-                }
-            )
-        }
-    }
-}
 
 @Composable
 private fun AddResourceDialog(
@@ -1459,127 +1729,281 @@ private fun AddResourceDialog(
         }
     )
 }
+@Composable
+fun ChatScreen(
+    messages: List<ChatMessage> = emptyList(),
+    onSendMessage: (String) -> Unit = {},
+    isLoading: Boolean = false,
+    isSending: Boolean = false,
+    modifier: Modifier = Modifier
+) {
+    val spacing = LocalSpacing.current
+    var messageText by remember { mutableStateOf("") }
+    val listState = rememberLazyListState()
+    val coroutineScope = rememberCoroutineScope()
+
+
+    // Auto-scroll to bottom when new messages arrive
+    LaunchedEffect(messages.size) {
+        if (messages.isNotEmpty() && messages.size > 0) {
+            try {
+                coroutineScope.launch {
+                    listState.animateScrollToItem(messages.size - 1)
+                }
+            } catch (e: Exception) {
+                Log.e("ChatScreen", "Error scrolling to bottom", e)
+            }
+        }
+    }
+
+    Column(
+        modifier = modifier.fillMaxSize()
+    ) {
+        // Messages List
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+        ) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = spacing.medium),
+                verticalArrangement = Arrangement.spacedBy(spacing.small),
+                contentPadding = PaddingValues(vertical = spacing.medium)
+            ) {
+                if (isLoading) {
+                    item {
+                        Box(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator()
+                        }
+                    }
+                } else if (messages.isEmpty()) {
+                    item {
+                        EmptyChatMessage()
+                    }
+                } else {
+                    items(messages) { message ->
+                        ChatMessageItem(message = message)
+                    }
+                }
+            }
+        }
+
+        // Message Input
+        MessageInput(
+            messageText = messageText,
+            onMessageTextChange = { messageText = it },
+            onSendClick = {
+                if (messageText.isNotBlank() && !isSending) {
+                    onSendMessage(messageText.trim())
+                    messageText = ""
+                }
+            },
+            isSending = isSending,
+            modifier = Modifier.padding(spacing.medium)
+        )
+    }
+}
 
 @Composable
-private fun ExpenseCard(
-    expense: Expense,
-    currentProject: Project?,
-    projectViewModel: ProjectViewModel,
+private fun EmptyChatMessage(
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier.fillMaxWidth(),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = "No messages yet.\nStart the conversation!",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+@Composable
+private fun ChatMessageItem(
+    message: ChatMessage,
+    modifier: Modifier = Modifier
+) {
+    val spacing = LocalSpacing.current
+
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = if (message.isFromCurrentUser) {
+            Arrangement.End
+        } else {
+            Arrangement.Start
+        }
+    ) {
+        Card(
+            modifier = Modifier.widthIn(max = 280.dp),
+            shape = RoundedCornerShape(
+                topStart = 16.dp,
+                topEnd = 16.dp,
+                bottomStart = if (message.isFromCurrentUser) 4.dp else 16.dp,
+                bottomEnd = if (message.isFromCurrentUser) 16.dp else 4.dp
+            ),
+            colors = CardDefaults.cardColors(
+                containerColor = if (message.isFromCurrentUser) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.surfaceVariant
+                }
+            )
+        ) {
+            Column(
+                modifier = Modifier.padding(spacing.medium)
+            ) {
+                if (!message.isFromCurrentUser) {
+                    Text(
+                        text = message.senderName,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        fontWeight = FontWeight.Medium
+                    )
+                    Spacer(modifier = Modifier.height(spacing.extraSmall))
+                }
+
+                Text(
+                    text = message.content,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (message.isFromCurrentUser) {
+                        MaterialTheme.colorScheme.onPrimary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                )
+
+                Spacer(modifier = Modifier.height(spacing.extraSmall))
+
+                Text(
+                    text = formatTimestamp(message.timestamp),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (message.isFromCurrentUser) {
+                        MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MessageInput(
+    messageText: String,
+    onMessageTextChange: (String) -> Unit,
+    onSendClick: () -> Unit,
+    isSending: Boolean = false,
+    modifier: Modifier = Modifier
+) {
+    val spacing = LocalSpacing.current
+
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.Bottom,
+        horizontalArrangement = Arrangement.spacedBy(spacing.small)
+    ) {
+        OutlinedTextField(
+            value = messageText,
+            onValueChange = onMessageTextChange,
+            modifier = Modifier.weight(1f),
+            placeholder = {
+                Text(
+                    text = "Type a message...",
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                )
+            },
+            maxLines = 4,
+            shape = RoundedCornerShape(24.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+            )
+        )
+
+        FloatingActionButton(
+            onClick = if (isSending) { {} } else { onSendClick },
+            modifier = Modifier.size(48.dp),
+            containerColor = if (isSending) MaterialTheme.colorScheme.primary.copy(alpha = 0.6f) else MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary
+        ) {
+            if (isSending) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.onPrimary
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.Send,
+                    contentDescription = "Send message",
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ResourceItem(
+    resource: Resource,
     modifier: Modifier = Modifier
 ) {
     val spacing = LocalSpacing.current
     val context = LocalContext.current
 
-    Card(
-        modifier = modifier,
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(spacing.medium)
-        ) {
-            // Header
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = expense.title,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    if (expense.description != null) {
-                        Text(
-                            text = expense.description,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                        )
-                    }
-                }
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        text = "$${String.format("%.2f", expense.amount)}",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Text(
-                        text = expense.status.uppercase(),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = when(expense.status) {
-                            "fully_paid" -> MaterialTheme.colorScheme.tertiary
-                            "pending" -> MaterialTheme.colorScheme.secondary
-                            else -> MaterialTheme.colorScheme.error
-                        }
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(spacing.small))
-
-            // Created by info
-            Text(
-                text = "Created by ${expense.createdBy.name}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = spacing.small, vertical = spacing.extraSmall)
+            .background(
+                color = MaterialTheme.colorScheme.primaryContainer,
+                shape = RoundedCornerShape(8.dp)
             )
-
-            Spacer(modifier = Modifier.height(spacing.medium))
-
-            // Splits
+            .padding(spacing.medium)
+    ) {
+        Column {
             Text(
-                text = "Split Details:",
-                style = MaterialTheme.typography.labelMedium,
+                text = resource.resourceName,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
                 fontWeight = FontWeight.Medium
             )
-
-            Spacer(modifier = Modifier.height(spacing.small))
-
-            expense.splits.forEach { split ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = spacing.extraSmall),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Checkbox(
-                            checked = split.isPaid,
-                            onCheckedChange = { isPaid ->
-                                currentProject?.let { project ->
-                                    projectViewModel.markSplitPaid(
-                                        projectId = project.id,
-                                        expenseId = expense.id,
-                                        userId = split.userId.id,
-                                        isPaid = isPaid
-                                    )
-                                }
-                            }
-                        )
-                        Text(
-                            text = split.userId.name,
-                            style = MaterialTheme.typography.bodyMedium,
-                            textDecoration = if (split.isPaid) TextDecoration.LineThrough else null
-                        )
+            Spacer(modifier = Modifier.height(spacing.extraSmall))
+            Text(
+                text = resource.link,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.clickable {
+                    try {
+                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(resource.link))
+                        context.startActivity(intent)
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "Could not open link", Toast.LENGTH_SHORT).show()
                     }
-                    Text(
-                        text = "$${String.format("%.2f", split.amount)}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium,
-                        color = if (split.isPaid)
-                            MaterialTheme.colorScheme.tertiary
-                        else
-                            MaterialTheme.colorScheme.error
-                    )
                 }
-            }
+            )
         }
+    }
+}
+
+private fun formatTimestamp(timestamp: Long): String {
+    val now = System.currentTimeMillis()
+    val diff = now - timestamp
+
+    return when {
+        diff < 60000 -> "Just now" // Less than 1 minute
+        diff < 3600000 -> "${diff / 60000}m ago" // Less than 1 hour
+        diff < 86400000 -> "${diff / 3600000}h ago" // Less than 1 day
+        else -> "${diff / 86400000}d ago" // More than 1 day
     }
 }

@@ -1,24 +1,17 @@
 package com.cpen321.usermanagement.data.repository
 
-import com.cpen321.usermanagement.data.remote.dto.Expense
+import com.cpen321.usermanagement.data.remote.dto.ExpenseDTO
 
 interface ExpenseRepository {
     suspend fun createExpense(
         projectId: String,
-        title: String,
-        description: String?,
+        description: String,
         amount: Double,
-        splitUserIds: List<String>
-    ): Result<Expense>
+        paidBy: String,
+        splitBetween: List<String>
+    ): Result<ExpenseDTO>
     
-    suspend fun getProjectExpenses(projectId: String): Result<List<Expense>>
+    suspend fun getProjectExpenses(projectId: String): Result<List<ExpenseDTO>>
     
-    suspend fun markSplitPaid(
-        projectId: String,
-        expenseId: String,
-        userId: String,
-        isPaid: Boolean
-    ): Result<Expense>
-    
-    suspend fun deleteExpense(projectId: String, expenseId: String): Result<Unit>
+    suspend fun deleteExpense(expenseId: String): Result<Unit>
 }

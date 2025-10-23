@@ -3,7 +3,7 @@ package com.cpen321.usermanagement.ui.viewmodels
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.cpen321.usermanagement.data.remote.dto.Expense
+import com.cpen321.usermanagement.data.remote.dto.ChatMessage
 import com.cpen321.usermanagement.data.remote.dto.Project
 import com.cpen321.usermanagement.data.repository.ExpenseRepository
 import com.cpen321.usermanagement.data.repository.ProjectRepository
@@ -23,11 +23,13 @@ data class ProjectUiState(
     val isCreating: Boolean = false,
     val isUpdating: Boolean = false,
     val isDeleting: Boolean = false,
+    val isSending: Boolean = false,
+    val isLoadingMessages: Boolean = false,
 
     // Data states
     val projects: List<Project> = emptyList(),
     val selectedProject: Project? = null,
-    val expenses: List<Expense> = emptyList(),
+    val messages: List<ChatMessage> = emptyList(),
 
     // Message states
     val message: String? = null,
@@ -58,17 +60,17 @@ class ProjectViewModel @Inject constructor(
     // Store tasks per project ID
     private val _tasksByProject = MutableStateFlow<Map<String, List<Task>>>(emptyMap())
     val tasksByProject: StateFlow<Map<String, List<Task>>> = _tasksByProject
-    
+
     // Get tasks for current project
     fun getTasksForProject(projectId: String): List<Task> {
         return _tasksByProject.value[projectId] ?: emptyList()
     }
-    
+
     fun clearTasks() {
         Log.d(TAG, "Clearing all tasks")
         _tasksByProject.value = emptyMap()
     }
-    
+
     fun clearTasksForProject(projectId: String) {
         Log.d(TAG, "Clearing tasks for project: $projectId")
         val currentTasks = _tasksByProject.value.toMutableMap()
@@ -81,21 +83,21 @@ class ProjectViewModel @Inject constructor(
             try {
                 Log.d(TAG, "Loading tasks for project: $projectId")
                 val fetchedTasks = taskRepository.getProjectTasks(projectId)
-                
+
                 // Validate that all tasks belong to the specified project
                 val validTasks = fetchedTasks.filter { task ->
                     task.projectId == projectId
                 }
-                
+
                 if (validTasks.size != fetchedTasks.size) {
                     Log.w(TAG, "Filtered out ${fetchedTasks.size - validTasks.size} tasks that don't belong to project: $projectId")
                 }
-                
+
                 // Store tasks for this specific project
                 val currentTasks = _tasksByProject.value.toMutableMap()
                 currentTasks[projectId] = validTasks
                 _tasksByProject.value = currentTasks
-                
+
                 Log.d(TAG, "Successfully loaded ${validTasks.size} tasks for project: $projectId")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to load tasks", e)
@@ -134,7 +136,7 @@ class ProjectViewModel @Inject constructor(
             try {
                 val task = taskRepository.createTask(projectId, name.trim(), assignee.trim(), status, deadline)
                 Log.d(TAG, "Task created successfully: ${task.id}")
-                
+
                 // Validate that the created task belongs to the correct project
                 if (task.projectId != projectId) {
                     Log.e(TAG, "ERROR: Created task belongs to project ${task.projectId} but was created for project $projectId")
@@ -144,14 +146,14 @@ class ProjectViewModel @Inject constructor(
                     )
                     return@launch
                 }
-                
+
                 // Add task to local state immediately for instant UI update
                 val currentTasks = _tasksByProject.value.toMutableMap()
                 val projectTasks = currentTasks[projectId] ?: emptyList()
                 currentTasks[projectId] = listOf(task) + projectTasks
                 _tasksByProject.value = currentTasks
                 Log.d(TAG, "Task added to local state for project: $projectId")
-                
+
                 _uiState.value = _uiState.value.copy(
                     isCreating = false,
                     message = "Task created successfully"
@@ -345,138 +347,6 @@ class ProjectViewModel @Inject constructor(
         Log.d(TAG, "selectProject called with project: ${project.name} (${project.id})")
         _uiState.value = _uiState.value.copy(selectedProject = project)
         Log.d(TAG, "selectedProject updated: ${_uiState.value.selectedProject?.name}")
-        // Load expenses for the selected project
-        loadExpenses(project.id)
-    }
-
-    // Expense-related methods
-    fun loadExpenses(projectId: String) {
-        Log.d(TAG, "Loading expenses for project: $projectId")
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
-
-            expenseRepository.getProjectExpenses(projectId)
-                .onSuccess { expenses ->
-                    Log.d(TAG, "Successfully loaded ${expenses.size} expenses")
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        expenses = expenses
-                    )
-                }
-                .onFailure { error ->
-                    Log.e(TAG, "Failed to load expenses", error)
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        errorMessage = error.message ?: "Failed to load expenses"
-                    )
-                }
-        }
-    }
-
-    fun createExpense(
-        projectId: String,
-        title: String,
-        description: String?,
-        amount: Double,
-        splitUserIds: List<String>
-    ) {
-        if (title.isBlank()) {
-            _uiState.value = _uiState.value.copy(
-                errorMessage = "Expense title cannot be empty"
-            )
-            return
-        }
-
-        if (amount <= 0) {
-            _uiState.value = _uiState.value.copy(
-                errorMessage = "Amount must be greater than 0"
-            )
-            return
-        }
-
-        if (splitUserIds.isEmpty()) {
-            _uiState.value = _uiState.value.copy(
-                errorMessage = "At least one user must be selected"
-            )
-            return
-        }
-
-        Log.d(TAG, "Creating expense: $title for project: $projectId")
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isCreating = true, errorMessage = null)
-
-            expenseRepository.createExpense(projectId, title.trim(), description?.trim(), amount, splitUserIds)
-                .onSuccess { expense ->
-                    Log.d(TAG, "Expense created successfully: ${expense.id}")
-                    // Add expense to local state immediately
-                    val updatedExpenses = listOf(expense) + _uiState.value.expenses
-                    _uiState.value = _uiState.value.copy(
-                        isCreating = false,
-                        expenses = updatedExpenses,
-                        message = "Expense created successfully"
-                    )
-                }
-                .onFailure { error ->
-                    Log.e(TAG, "Failed to create expense", error)
-                    _uiState.value = _uiState.value.copy(
-                        isCreating = false,
-                        errorMessage = error.message ?: "Failed to create expense"
-                    )
-                }
-        }
-    }
-
-    fun markSplitPaid(projectId: String, expenseId: String, userId: String, isPaid: Boolean) {
-        Log.d(TAG, "Marking split as ${if (isPaid) "paid" else "unpaid"} for expense: $expenseId, user: $userId")
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isUpdating = true, errorMessage = null)
-
-            expenseRepository.markSplitPaid(projectId, expenseId, userId, isPaid)
-                .onSuccess { updatedExpense ->
-                    Log.d(TAG, "Split status updated successfully")
-                    // Update expense in local state
-                    val updatedExpenses = _uiState.value.expenses.map { expense ->
-                        if (expense.id == expenseId) updatedExpense else expense
-                    }
-                    _uiState.value = _uiState.value.copy(
-                        isUpdating = false,
-                        expenses = updatedExpenses,
-                        message = "Payment status updated"
-                    )
-                }
-                .onFailure { error ->
-                    Log.e(TAG, "Failed to update split status", error)
-                    _uiState.value = _uiState.value.copy(
-                        isUpdating = false,
-                        errorMessage = error.message ?: "Failed to update payment status"
-                    )
-                }
-        }
-    }
-
-    fun deleteExpense(projectId: String, expenseId: String) {
-        Log.d(TAG, "Deleting expense: $expenseId")
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isDeleting = true, errorMessage = null)
-
-            expenseRepository.deleteExpense(projectId, expenseId)
-                .onSuccess {
-                    Log.d(TAG, "Expense deleted successfully")
-                    val updatedExpenses = _uiState.value.expenses.filter { it.id != expenseId }
-                    _uiState.value = _uiState.value.copy(
-                        isDeleting = false,
-                        expenses = updatedExpenses,
-                        message = "Expense deleted successfully"
-                    )
-                }
-                .onFailure { error ->
-                    Log.e(TAG, "Failed to delete expense", error)
-                    _uiState.value = _uiState.value.copy(
-                        isDeleting = false,
-                        errorMessage = error.message ?: "Failed to delete expense"
-                    )
-                }
-        }
     }
 
     fun addResource(projectId: String, resourceName: String, link: String) {
@@ -555,6 +425,100 @@ class ProjectViewModel @Inject constructor(
     fun refreshAllProjects() {
         Log.d(TAG, "Refreshing all projects for user")
         loadUserProjects()
+    }
+
+    fun sendMessage(projectId: String, content: String) {
+        Log.d(TAG, "sendMessage called with projectId: $projectId, content: '$content'")
+
+        if (content.isBlank()) {
+            Log.d(TAG, "Message content is blank, showing error")
+            _uiState.value = _uiState.value.copy(
+                errorMessage = "Message content cannot be empty"
+            )
+            return
+        }
+
+        if (content.length > 2000) {
+            Log.d(TAG, "Message content too long, showing error")
+            _uiState.value = _uiState.value.copy(
+                errorMessage = "Message content must be less than 2000 characters"
+            )
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isSending = true, errorMessage = null)
+
+            projectRepository.sendMessage(projectId, content.trim())
+                .onSuccess { message ->
+                    Log.d(TAG, "Message sent successfully: ${message.id}")
+                    // Add message to local state immediately for instant UI update
+                    val currentMessages = _uiState.value.messages
+                    val updatedMessages = currentMessages + message
+                    _uiState.value = _uiState.value.copy(
+                        isSending = false,
+                        messages = updatedMessages,
+                        message = "Message sent successfully"
+                    )
+                }
+                .onFailure { error ->
+                    Log.e(TAG, "Failed to send message", error)
+                    _uiState.value = _uiState.value.copy(
+                        isSending = false,
+                        errorMessage = error.message ?: "Failed to send message"
+                    )
+                }
+        }
+    }
+
+    fun loadMessages(projectId: String) {
+        Log.d(TAG, "loadMessages called with projectId: $projectId")
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoadingMessages = true, errorMessage = null)
+
+            projectRepository.getMessages(projectId)
+                .onSuccess { messages ->
+                    Log.d(TAG, "Messages loaded successfully: ${messages.size} messages")
+                    _uiState.value = _uiState.value.copy(
+                        isLoadingMessages = false,
+                        messages = messages,
+                        message = "Messages loaded successfully"
+                    )
+                }
+                .onFailure { error ->
+                    Log.e(TAG, "Failed to load messages", error)
+                    _uiState.value = _uiState.value.copy(
+                        isLoadingMessages = false,
+                        errorMessage = error.message ?: "Failed to load messages"
+                    )
+                }
+        }
+    }
+
+    fun deleteMessage(projectId: String, messageId: String) {
+        Log.d(TAG, "deleteMessage called with projectId: $projectId, messageId: $messageId")
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isDeleting = true, errorMessage = null)
+
+            projectRepository.deleteMessage(projectId, messageId)
+                .onSuccess {
+                    Log.d(TAG, "Message deleted successfully: $messageId")
+                    // Remove message from local state
+                    val updatedMessages = _uiState.value.messages.filter { it.id != messageId }
+                    _uiState.value = _uiState.value.copy(
+                        isDeleting = false,
+                        messages = updatedMessages,
+                        message = "Message deleted successfully"
+                    )
+                }
+                .onFailure { error ->
+                    Log.e(TAG, "Failed to delete message", error)
+                    _uiState.value = _uiState.value.copy(
+                        isDeleting = false,
+                        errorMessage = error.message ?: "Failed to delete message"
+                    )
+                }
+        }
     }
 
     fun clearMessages() {
