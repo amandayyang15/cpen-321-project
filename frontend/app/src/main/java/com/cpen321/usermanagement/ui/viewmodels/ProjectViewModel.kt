@@ -80,30 +80,17 @@ class ProjectViewModel @Inject constructor(
 
     fun loadProjectTasks(projectId: String) {
         viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
             try {
-                Log.d(TAG, "Loading tasks for project: $projectId")
-                val fetchedTasks = taskRepository.getProjectTasks(projectId)
-
-                // Validate that all tasks belong to the specified project
-                val validTasks = fetchedTasks.filter { task ->
-                    task.projectId == projectId
-                }
-
-                if (validTasks.size != fetchedTasks.size) {
-                    Log.w(TAG, "Filtered out ${fetchedTasks.size - validTasks.size} tasks that don't belong to project: $projectId")
-                }
-
-                // Store tasks for this specific project
+                val tasks = taskRepository.getProjectTasks(projectId)
                 val currentTasks = _tasksByProject.value.toMutableMap()
-                currentTasks[projectId] = validTasks
+                currentTasks[projectId] = tasks
                 _tasksByProject.value = currentTasks
-
-                Log.d(TAG, "Successfully loaded ${validTasks.size} tasks for project: $projectId")
+                Log.d(TAG, "Loaded ${tasks.size} tasks for project: $projectId")
+                _uiState.value = _uiState.value.copy(isLoading = false, message = "Tasks loaded successfully")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to load tasks", e)
-                _uiState.value = _uiState.value.copy(
-                    errorMessage = "Failed to load tasks: ${e.message}"
-                )
+                _uiState.value = _uiState.value.copy(isLoading = false, errorMessage = "Failed to load tasks: ${e.message}")
             }
         }
     }
@@ -344,7 +331,7 @@ class ProjectViewModel @Inject constructor(
     }
 
     fun selectProject(project: Project) {
-        Log.d(TAG, "selectProject called with project: ${project.name} (${project.id})")
+        Log.d(TAG, "🚩 selectProject called with project: ${project.name} (${project.id})")
         _uiState.value = _uiState.value.copy(selectedProject = project)
         Log.d(TAG, "selectedProject updated: ${_uiState.value.selectedProject?.name}")
     }

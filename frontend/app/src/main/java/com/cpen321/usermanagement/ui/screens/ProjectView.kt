@@ -554,49 +554,54 @@ private fun ProjectBody(
         }
 
         if (selectedTab == "Task") {
-            Column {
-                Text("Task Board", style = MaterialTheme.typography.titleLarge)
+            Text("Task Board", style = MaterialTheme.typography.titleLarge)
 
-                // Show error message if present
-                if (uiState.errorMessage != null) {
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.errorContainer
-                        )
-                    ) {
-                        Text(
-                            text = uiState.errorMessage!!,
-                            color = MaterialTheme.colorScheme.onErrorContainer,
-                            modifier = Modifier.padding(8.dp)
-                        )
-                    }
+            // Show error message if present
+            if (uiState.errorMessage != null) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer
+                    )
+                ) {
+                    Text(
+                        text = uiState.errorMessage!!,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.padding(8.dp)
+                    )
                 }
+            }
 
-                // Show success message if present
-                if (uiState.message != null && uiState.message!!.contains("Task")) {
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer
-                        )
-                    ) {
-                        Text(
-                            text = uiState.message!!,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.padding(8.dp)
-                        )
-                    }
+            // Show success message if present
+            if (uiState.message != null && uiState.message!!.contains("Task")) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                    )
+                ) {
+                    Text(
+                        text = uiState.message!!,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.padding(8.dp)
+                    )
                 }
+            }
 
-                if (tasks.isEmpty()) {
-                    Text("No tasks yet.")
-                } else {
-                    tasks.forEach { task ->
+            if (tasks.isEmpty()) {
+                Text("No tasks yet.")
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f, fill = true), // Ensures it takes available space
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    items(tasks) { task ->
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -621,166 +626,6 @@ private fun ProjectBody(
                 .padding(top = spacing.large)
         ) {
             when (selectedTab) {
-                "Task" -> {
-                    Text(
-                        text = "Tasks:",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(bottom = spacing.medium)
-                    )
-
-                    // Table header
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = spacing.small, vertical = spacing.medium)
-                            .background(
-                                color = MaterialTheme.colorScheme.primaryContainer,
-                                shape = RoundedCornerShape(4.dp)
-                            )
-                            .padding(spacing.medium),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Task Name",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(horizontal = spacing.small),
-                            textAlign = TextAlign.Center
-                        )
-                        Text(
-                            text = "Assignee",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(horizontal = spacing.small),
-                            textAlign = TextAlign.Center
-                        )
-                        Text(
-                            text = "Progress",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(horizontal = spacing.small),
-                            textAlign = TextAlign.Center
-                        )
-                        Text(
-                            text = "Deadline",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(horizontal = spacing.small),
-                            textAlign = TextAlign.Center
-                        )
-                    }
-
-                    // Table row
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = spacing.small, vertical = spacing.medium)
-                            .background(
-                                color = MaterialTheme.colorScheme.surfaceVariant,
-                                shape = RoundedCornerShape(4.dp)
-                            )
-                            .padding(spacing.medium),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Task1",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(horizontal = spacing.small),
-                            textAlign = TextAlign.Center
-                        )
-                        Text(
-                            text = "Justin",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(horizontal = spacing.small),
-                            textAlign = TextAlign.Center
-                        )
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(horizontal = spacing.small)
-                        ) {
-                            val backgroundColor = when (selectedProgress) {
-                                "In Progress" -> Color(0xFFFFEB3B) // Yellow
-                                "Done" -> Color(0xFF4CAF50) // Green
-                                "Backlog" -> Color(0xFFFF9800) // Orange
-                                "Blocked" -> Color(0xFFF44336) // Red
-                                else -> MaterialTheme.colorScheme.surfaceVariant
-                            }
-
-                            val textColor = when (selectedProgress) {
-                                "In Progress" -> Color.Black
-                                "Done" -> Color.White
-                                "Backlog" -> Color.White
-                                "Blocked" -> Color.White
-                                else -> MaterialTheme.colorScheme.onSurfaceVariant
-                            }
-
-                            TextButton(
-                                onClick = { progressExpanded = !progressExpanded },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(
-                                        color = backgroundColor,
-                                        shape = RoundedCornerShape(4.dp)
-                                    )
-                            ) {
-                                Text(
-                                    text = selectedProgress,
-                                    style = MaterialTheme.typography.labelSmall.copy(
-                                        fontSize = MaterialTheme.typography.labelSmall.fontSize * 0.8f
-                                    ),
-                                    textAlign = TextAlign.Center,
-                                    color = textColor
-                                )
-                            }
-                            DropdownMenu(
-                                expanded = progressExpanded,
-                                onDismissRequest = { progressExpanded = false }
-                            ) {
-                                listOf("In Progress", "Done", "Backlog", "Blocked").forEach { option ->
-                                    DropdownMenuItem(
-                                        text = { Text(option) },
-                                        onClick = {
-                                            selectedProgress = option
-                                            progressExpanded = false
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                        Text(
-                            text = "Oct 22nd",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(horizontal = spacing.small),
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                }
                 "Project Settings" -> {
                     Text(
                         text = "Project Settings:",
