@@ -395,14 +395,14 @@ private fun ProjectBody(
 
         // Get tasks for current project and filter to ensure only current project tasks are shown
         val allTasks = currentProject?.let { projectViewModel.getTasksForProject(it.id) } ?: emptyList()
-        val tasks = allTasks.filter { task -> 
-            task.projectId == currentProject?.id 
+        val tasks = allTasks.filter { task ->
+            task.projectId == currentProject?.id
         }
 
         if (selectedTab == "Task") {
             Column {
                 Text("Task Board", style = MaterialTheme.typography.titleLarge)
-                
+
                 // Show error message if present
                 if (uiState.errorMessage != null) {
                     Card(
@@ -420,7 +420,7 @@ private fun ProjectBody(
                         )
                     }
                 }
-                
+
                 // Show success message if present
                 if (uiState.message != null && uiState.message!!.contains("Task")) {
                     Card(
@@ -438,7 +438,7 @@ private fun ProjectBody(
                         )
                     }
                 }
-                
+
                 if (tasks.isEmpty()) {
                     Text("No tasks yet.")
                 } else {
@@ -973,14 +973,14 @@ private fun ProjectBody(
                             ) {
                                 allMembers.forEach { member ->
                                     DropdownMenuItem(
-                                        text = { 
+                                        text = {
                                             Column {
                                                 Text(
                                                     text = member.userId,
                                                     style = MaterialTheme.typography.bodyMedium
                                                 )
                                                 Text(
-                                                    text = member.role.capitalize(),
+                                                    text = member.role.replaceFirstChar { it.uppercase() },
                                                     style = MaterialTheme.typography.bodySmall,
                                                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                                                 )
