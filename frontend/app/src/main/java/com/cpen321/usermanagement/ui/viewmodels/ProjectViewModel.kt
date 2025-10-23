@@ -156,8 +156,8 @@ class ProjectViewModel @Inject constructor(
                     isCreating = false,
                     message = "Task created successfully"
                 )
-                
-                Log.d(TAG, "Task added to local state. Total tasks: ${_tasks.value.size}")
+
+                Log.d(TAG, "Task added to local state. Total tasks: ${_tasksByProject.value[projectId]?.size ?: 0}")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to create task", e)
                 _uiState.value = _uiState.value.copy(
