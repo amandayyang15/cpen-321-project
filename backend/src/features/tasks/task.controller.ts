@@ -101,7 +101,17 @@ export class TaskController {
 
       logger.info('✅ Task created successfully in database');
       logger.info('Task ID:', task._id.toString());
+      logger.info('Task Project ID:', task.projectId.toString());
       logger.info('Task details:', JSON.stringify(task, null, 2));
+      
+      // Verify the task was created with the correct project ID
+      if (task.projectId.toString() !== projectId) {
+        logger.error('❌ CRITICAL: Task created with wrong project ID!');
+        logger.error('Expected project ID:', projectId);
+        logger.error('Actual project ID:', task.projectId.toString());
+      } else {
+        logger.info('✅ Task created with correct project ID');
+      }
 
       res.status(201).json({ success: true, data: task });
     } catch (error) {
@@ -119,7 +129,7 @@ export class TaskController {
       const userId = req.user?.id;
 
       logger.info('=== GET TASKS BY PROJECT REQUEST ===');
-      logger.info('Project ID:', projectId);
+      logger.info('Project ID (string):', projectId);
       logger.info('User ID:', userId);
 
       if (!userId) {
@@ -127,9 +137,24 @@ export class TaskController {
         return;
       }
 
-      const tasks = await taskModel.findByProjectId(new mongoose.Types.ObjectId(projectId));
+      // Convert to ObjectId and log the conversion
+      const projectObjectId = new mongoose.Types.ObjectId(projectId);
+      logger.info('Project ID (ObjectId):', projectObjectId.toString());
+      
+      // First, let's check what tasks exist in the database for debugging
+      const allTasks = await taskModel.getAllTasks();
+      logger.info('🔍 DEBUG: All tasks in database:', allTasks.length);
+      allTasks.forEach((task, index) => {
+        logger.info(`📋 Task ${index + 1}: ID=${task._id}, ProjectID=${task.projectId}, Title=${task.title}`);
+      });
 
-      logger.info('✅ Tasks retrieved:', tasks.length);
+      const tasks = await taskModel.findByProjectId(projectObjectId);
+
+      logger.info('✅ Tasks retrieved for project:', tasks.length);
+      tasks.forEach((task, index) => {
+        logger.info(`📋 Retrieved Task ${index + 1}: ID=${task._id}, ProjectID=${task.projectId}, Title=${task.title}`);
+      });
+      
       res.status(200).json({ success: true, data: tasks });
     } catch (error) {
       logger.error('❌ Error getting tasks:', error);

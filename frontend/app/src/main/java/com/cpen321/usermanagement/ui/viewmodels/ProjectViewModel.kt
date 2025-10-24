@@ -52,6 +52,8 @@ class ProjectViewModel @Inject constructor(
 
     private var isCreatingProject = false
     private var isJoiningProject = false
+    private var isLoadingTasks = false
+    private var isCreatingTask = false
 
     init {
         loadUserProjects()
@@ -63,7 +65,31 @@ class ProjectViewModel @Inject constructor(
 
     // Get tasks for current project
     fun getTasksForProject(projectId: String): List<Task> {
-        return _tasksByProject.value[projectId] ?: emptyList()
+        Log.d(TAG, "=== getTasksForProject called ===")
+        Log.d(TAG, "Requested projectId: $projectId")
+        Log.d(TAG, "Current _tasksByProject state: ${_tasksByProject.value}")
+        Log.d(TAG, "Keys in _tasksByProject: ${_tasksByProject.value.keys}")
+        
+        val tasks = _tasksByProject.value[projectId] ?: emptyList()
+        Log.d(TAG, "getTasksForProject($projectId): returning ${tasks.size} tasks")
+        
+        if (tasks.isEmpty()) {
+            Log.d(TAG, "No tasks found for project $projectId")
+            Log.d(TAG, "Available projects with tasks:")
+            _tasksByProject.value.forEach { (storedProjectId, storedTasks) ->
+                Log.d(TAG, "  Project $storedProjectId: ${storedTasks.size} tasks")
+                storedTasks.forEach { task ->
+                    Log.d(TAG, "    Task: ${task.id} - ${task.title} (projectId: ${task.projectId})")
+                }
+            }
+        } else {
+            tasks.forEach { task ->
+                Log.d(TAG, "Task: ${task.id} - ${task.title} (projectId: ${task.projectId})")
+                Log.d(TAG, "Task projectId matches requested projectId: ${task.projectId == projectId}")
+            }
+        }
+        Log.d(TAG, "=== getTasksForProject completed ===")
+        return tasks
     }
 
     fun clearTasks() {
@@ -79,18 +105,69 @@ class ProjectViewModel @Inject constructor(
     }
 
     fun loadProjectTasks(projectId: String) {
+        // Prevent multiple simultaneous calls
+        if (isLoadingTasks) {
+            Log.d(TAG, "loadProjectTasks already in progress, ignoring duplicate call for project: $projectId")
+            return
+        }
+        
+        Log.d(TAG, "=== STARTING LOAD PROJECT TASKS ===")
+        Log.d(TAG, "Loading tasks for project: $projectId")
+        Log.d(TAG, "Project ID type: ${projectId::class.java.simpleName}")
+        Log.d(TAG, "Project ID length: ${projectId.length}")
+        Log.d(TAG, "isLoadingTasks flag: $isLoadingTasks")
         viewModelScope.launch {
+            isLoadingTasks = true
+            Log.d(TAG, "Set isLoadingTasks to true")
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
             try {
+                Log.d(TAG, "About to call taskRepository.getProjectTasks($projectId)")
                 val tasks = taskRepository.getProjectTasks(projectId)
                 val currentTasks = _tasksByProject.value.toMutableMap()
+                
+                Log.d(TAG, "loadProjectTasks($projectId): received ${tasks.size} tasks from server")
+                Log.d(TAG, "Current local tasks for project $projectId: ${currentTasks[projectId]?.size ?: 0}")
+                
+                tasks.forEach { task ->
+                    Log.d(TAG, "Server task: ${task.id} - ${task.title} (projectId: ${task.projectId})")
+                    Log.d(TAG, "Task belongs to project: ${task.projectId}, Loading for project: $projectId")
+                }
+                
+                // Clear existing tasks for this project first to prevent duplicates
+                currentTasks.remove(projectId)
+                Log.d(TAG, "Cleared existing tasks for project: $projectId")
+                
+                // Then add the fresh tasks from server
                 currentTasks[projectId] = tasks
                 _tasksByProject.value = currentTasks
-                Log.d(TAG, "Loaded ${tasks.size} tasks for project: $projectId")
-                _uiState.value = _uiState.value.copy(isLoading = false, message = "Tasks loaded successfully")
+
+                Log.d(TAG, "Replaced local tasks with ${tasks.size} server tasks for project: $projectId")
+                Log.d(TAG, "Updated _tasksByProject state: ${_tasksByProject.value}")
+                Log.d(TAG, "Current tasksByProject keys: ${_tasksByProject.value.keys}")
+                Log.d(TAG, "Tasks stored for each project:")
+                _tasksByProject.value.forEach { (storedProjectId, storedTasks) ->
+                    Log.d(TAG, "  Project $storedProjectId: ${storedTasks.size} tasks")
+                    storedTasks.forEach { task ->
+                        Log.d(TAG, "    Task: ${task.id} - ${task.title} (projectId: ${task.projectId})")
+                    }
+                }
+                
+                // Verify the tasks are stored correctly
+                val storedTasks = _tasksByProject.value[projectId]
+                Log.d(TAG, "Verification: Stored tasks for project $projectId: ${storedTasks?.size ?: 0}")
+                storedTasks?.forEach { task ->
+                    Log.d(TAG, "  Stored task: ${task.id} - ${task.title} (projectId: ${task.projectId})")
+                }
+                _uiState.value = _uiState.value.copy(isLoading = false)
+                Log.d(TAG, "=== LOAD PROJECT TASKS COMPLETED ===")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to load tasks", e)
                 _uiState.value = _uiState.value.copy(isLoading = false, errorMessage = "Failed to load tasks: ${e.message}")
+                Log.d(TAG, "=== LOAD PROJECT TASKS FAILED ===")
+            } finally {
+                isLoadingTasks = false
+                Log.d(TAG, "Reset isLoadingTasks to false")
+                Log.d(TAG, "=== LOAD PROJECT TASKS FINALLY BLOCK ===")
             }
         }
     }
@@ -116,7 +193,22 @@ class ProjectViewModel @Inject constructor(
             return
         }
 
+        // Prevent multiple simultaneous task creation calls
+        if (isCreatingTask) {
+            Log.d(TAG, "Task creation already in progress, ignoring duplicate call")
+            return
+        }
+
+        Log.d(TAG, "=== STARTING TASK CREATION ===")
         Log.d(TAG, "Creating task: $name for project: $projectId")
+        Log.d(TAG, "Project ID type: ${projectId::class.java.simpleName}")
+        Log.d(TAG, "Project ID length: ${projectId.length}")
+        Log.d(TAG, "isCreatingTask flag: $isCreatingTask")
+        
+        // Set the flag immediately to prevent race conditions
+        isCreatingTask = true
+        Log.d(TAG, "Set isCreatingTask to true")
+        
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isCreating = true, errorMessage = null)
 
@@ -134,25 +226,32 @@ class ProjectViewModel @Inject constructor(
                     return@launch
                 }
 
-                // Add task to local state immediately for instant UI update
-                val currentTasks = _tasksByProject.value.toMutableMap()
-                val projectTasks = currentTasks[projectId] ?: emptyList()
-                currentTasks[projectId] = listOf(task) + projectTasks
-                _tasksByProject.value = currentTasks
-                Log.d(TAG, "Task added to local state for project: $projectId")
+                // Reload tasks from server to ensure consistency and prevent duplicates
+                // This ensures we have the latest state from the server
+                Log.d(TAG, "createTask: Task ${task.id} (${task.title}) created successfully for project $projectId")
+                Log.d(TAG, "Task projectId from server: ${task.projectId}")
+                
+                // Reload tasks from server to get the complete, up-to-date list
+                loadProjectTasks(projectId)
 
                 _uiState.value = _uiState.value.copy(
                     isCreating = false,
                     message = "Task created successfully"
                 )
 
-                Log.d(TAG, "Task added to local state. Total tasks: ${_tasksByProject.value[projectId]?.size ?: 0}")
+                Log.d(TAG, "Task created successfully, reloading from server")
+                Log.d(TAG, "=== TASK CREATION COMPLETED ===")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to create task", e)
                 _uiState.value = _uiState.value.copy(
                     isCreating = false,
                     errorMessage = "Failed to create task: ${e.message}"
                 )
+                Log.d(TAG, "=== TASK CREATION FAILED ===")
+            } finally {
+                isCreatingTask = false
+                Log.d(TAG, "Reset isCreatingTask to false")
+                Log.d(TAG, "=== TASK CREATION FINALLY BLOCK ===")
             }
         }
     }

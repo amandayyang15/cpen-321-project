@@ -257,6 +257,11 @@ private fun ProjectBody(
     val profileUiState by profileViewModel.uiState.collectAsState()
     val currentProject = uiState.selectedProject
     val currentUser = profileUiState.user
+    
+    // Debug project changes
+    LaunchedEffect(currentProject) {
+        Log.d("ProjectView", "Current project changed to: ${currentProject?.id} (${currentProject?.name})")
+    }
     val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
 
 
@@ -421,8 +426,9 @@ private fun ProjectBody(
 
     // Load tasks when switching to Task Board tab or when project changes
     LaunchedEffect(selectedTab, currentProject?.id) {
+        Log.d("ProjectView", "LaunchedEffect triggered - selectedTab: $selectedTab, currentProject: ${currentProject?.id} (${currentProject?.name})")
         if (selectedTab == "Task" && currentProject != null) {
-            Log.d("ProjectView", "Loading tasks for project: ${currentProject.id}")
+            Log.d("ProjectView", "Loading tasks for project: ${currentProject.id} (${currentProject.name})")
             projectViewModel.loadProjectTasks(currentProject.id)
         }
     }
@@ -547,11 +553,16 @@ private fun ProjectBody(
             }
         }
 
-        // Get tasks for current project and filter to ensure only current project tasks are shown
-        val allTasks = currentProject?.let { projectViewModel.getTasksForProject(it.id) } ?: emptyList()
-        val tasks = allTasks.filter { task ->
-            task.projectId == currentProject?.id
-        }
+        // Get tasks for current project
+        val tasks = currentProject?.let { 
+            Log.d("ProjectView", "Getting tasks for current project: ${it.id} (${it.name})")
+            val projectTasks = projectViewModel.getTasksForProject(it.id)
+            Log.d("ProjectView", "Retrieved ${projectTasks.size} tasks for project ${it.id}")
+            projectTasks.forEach { task ->
+                Log.d("ProjectView", "Task: ${task.id} - ${task.title} (projectId: ${task.projectId})")
+            }
+            projectTasks
+        } ?: emptyList()
 
         if (selectedTab == "Task") {
             Text("Task Board", style = MaterialTheme.typography.titleLarge)
@@ -608,10 +619,55 @@ private fun ProjectBody(
                                 .padding(vertical = 4.dp)
                         ) {
                             Column(modifier = Modifier.padding(8.dp)) {
-                                Text("Name: ${task.title}", fontWeight = FontWeight.Bold)
-                                Text("Status: ${task.status}")
-                                Text("Assignees: ${task.assignees.joinToString()}")
-                                Text("Deadline: ${task.deadline ?: "None"}")
+                                Row {
+                                    Text(
+                                        text = "Name: ",
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(text = task.title)
+                                }
+                                Row {
+                                    Text(
+                                        text = "Status: ",
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = task.status,
+                                        color = when (task.status.lowercase()) {
+                                            "in_progress" -> Color(0xFFB8860B) // Dark Goldenrod (darker yellow/orange)
+                                            "completed", "done" -> Color(0xFF4CAF50) // Green
+                                            "backlog" -> Color(0xFF9C27B0) // Purple
+                                            "blocked" -> Color(0xFFF44336) // Red
+                                            "not_started" -> Color(0xFF2196F3) // Blue
+                                            else -> Color.Unspecified // Default color
+                                        }
+                                    )
+                                }
+                                Row {
+                                    Text(
+                                        text = "Assignees: ",
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(text = task.assignees.joinToString())
+                                }
+                                Row {
+                                    Text(
+                                        text = "Deadline: ",
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(text = task.deadline?.let { deadline ->
+                                        try {
+                                            // Parse the ISO date string and format it to show only the date
+                                            val inputFormat = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.getDefault())
+                                            val outputFormat = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+                                            val date = inputFormat.parse(deadline)
+                                            outputFormat.format(date)
+                                        } catch (e: Exception) {
+                                            // If parsing fails, try to extract just the date part
+                                            deadline.substringBefore("T")
+                                        }
+                                    } ?: "None")
+                                }
                             }
                         }
                     }

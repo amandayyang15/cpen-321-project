@@ -15,14 +15,20 @@ class TaskRepositoryImpl @Inject constructor(
         status: String,
         deadline: String?
     ): Task {
-        println("🚀 TaskRepositoryImpl.createTask() called")
+        val requestId = System.currentTimeMillis()
+        println("🚀 TaskRepositoryImpl.createTask() called - Request ID: $requestId")
         println("📝 Task data: projectId=$projectId, name=$name, assignee=$assignee, status=$status, deadline=$deadline")
+        println("🔍 Thread: ${Thread.currentThread().name}")
+        println("🔍 Timestamp: ${System.currentTimeMillis()}")
         
         val request = CreateTaskRequest(name, assignee, status, deadline)
         println("📤 Sending CreateTaskRequest: $request")
         
         try {
+            println("🌐 About to call taskInterface.createTask()")
+            println("🌐 Calling taskInterface.createTask() with projectId=$projectId")
             val response = taskInterface.createTask(projectId, request)
+            println("🌐 taskInterface.createTask() completed")
             println("📡 HTTP Response received: isSuccessful=${response.isSuccessful}, code=${response.code()}")
             println("📄 Response body: ${response.body()}")
             println("❌ Response error body: ${response.errorBody()?.string()}")
@@ -44,9 +50,14 @@ class TaskRepositoryImpl @Inject constructor(
     }
     override suspend fun getProjectTasks(projectId: String): List<Task> {
         println("🔍 TaskRepositoryImpl.getProjectTasks() called for project: $projectId")
+        println("🔍 Project ID type: ${projectId::class.java.simpleName}")
+        println("🔍 Project ID length: ${projectId.length}")
+        println("🔍 Project ID characters: ${projectId.toCharArray().joinToString(", ")}")
         
         try {
+            println("🌐 About to call taskInterface.getProjectTasks() with projectId=$projectId")
             val response = taskInterface.getProjectTasks(projectId)
+            println("🌐 taskInterface.getProjectTasks() completed")
             println("📡 HTTP Response received: isSuccessful=${response.isSuccessful}, code=${response.code()}")
             println("📄 Response body: ${response.body()}")
             println("❌ Response error body: ${response.errorBody()?.string()}")
@@ -55,7 +66,7 @@ class TaskRepositoryImpl @Inject constructor(
                 val tasks = response.body()!!.data!!
                 println("✅ Retrieved ${tasks.size} tasks for project $projectId")
                 tasks.forEach { task ->
-                    println("📋 Task: ${task.id} - ${task.title} (${task.status})")
+                    println("📋 Task: ${task.id} - ${task.title} (${task.status}) - ProjectID: ${task.projectId}")
                 }
                 return tasks
             } else {
