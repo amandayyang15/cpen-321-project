@@ -61,6 +61,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.setValue
 import android.util.Log
 import androidx.compose.ui.Alignment
@@ -79,6 +80,7 @@ import com.cpen321.usermanagement.data.remote.dto.ProjectMember
 
 import com.cpen321.usermanagement.ui.theme.LocalSpacing
 import com.cpen321.usermanagement.ui.viewmodels.ProjectViewModel
+import com.cpen321.usermanagement.ui.viewmodels.ProfileViewModel
 import android.widget.Toast
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
@@ -112,6 +114,7 @@ data class ChatMessage(
     val projectId: String,
     val isFromCurrentUser: Boolean = false
 )
+
 
 @Composable
 fun ProjectView(
@@ -264,21 +267,49 @@ private fun ProjectBody(
     val profileUiState by profileViewModel.uiState.collectAsState()
     val currentProject = uiState.selectedProject
     val currentUser = profileUiState.user
+    val coroutineScope = rememberCoroutineScope()
     
-    // Project Settings state
-    var projectName by remember { mutableStateOf(currentProject?.name ?: "") }
-    var selectedUserToRemove by remember { mutableStateOf("") }
-    var removeUserExpanded by remember { mutableStateOf(false) }
-    var showDeleteConfirmationDialog by remember { mutableStateOf(false) }
-    var refreshMembersTrigger by remember { mutableStateOf(0) }
+        // Project Settings state
+        var projectName by remember { mutableStateOf(currentProject?.name ?: "") }
+        var selectedUserToRemove by remember { mutableStateOf("") }
+        var removeUserExpanded by remember { mutableStateOf(false) }
+        var showDeleteConfirmationDialog by remember { mutableStateOf(false) }
+        var refreshMembersTrigger by remember { mutableStateOf(0) }
+        var userNames by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+        var isLoadingUserNames by remember { mutableStateOf(false) }
     
-    // Debug project changes and update project name field
-    LaunchedEffect(currentProject) {
-        Log.d("ProjectView", "Current project changed to: ${currentProject?.id} (${currentProject?.name})")
-        projectName = currentProject?.name ?: ""
-        // Force member list recalculation when project changes
-        refreshMembersTrigger++
-    }
+        // Debug project changes and update project name field
+        LaunchedEffect(currentProject) {
+            Log.d("ProjectView", "Current project changed to: ${currentProject?.id} (${currentProject?.name})")
+            projectName = currentProject?.name ?: ""
+            // Force member list recalculation when project changes
+            refreshMembersTrigger++
+            
+            // Load user names for all members
+            currentProject?.members?.let { members ->
+                val userIds = members.map { it.userId }
+                // Use coroutine scope to fetch user names
+                coroutineScope.launch {
+                    isLoadingUserNames = true
+                    val names = mutableMapOf<String, String>()
+                    userIds.forEach { userId ->
+                        try {
+                            val result = profileViewModel.getUserById(userId)
+                            if (result.isSuccess) {
+                                val user = result.getOrNull()
+                                names[userId] = user?.name ?: "Unknown User"
+                            } else {
+                                names[userId] = "Unknown User"
+                            }
+                        } catch (e: Exception) {
+                            names[userId] = "Unknown User"
+                        }
+                    }
+                    userNames = names
+                    isLoadingUserNames = false
+                }
+            }
+        }
 
     // Handle project update success/error messages
     LaunchedEffect(uiState.message, uiState.errorMessage) {
@@ -300,7 +331,6 @@ private fun ProjectBody(
             }
         }
     }
-    val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
 
 
     var progressExpanded by remember { mutableStateOf(false) }
@@ -684,7 +714,29 @@ private fun ProjectBody(
                                         text = "Assignees: ",
                                         fontWeight = FontWeight.Bold
                                     )
-                                    Text(text = task.assignees.joinToString())
+                                    if (isLoadingUserNames) {
+                                        Row {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(12.dp),
+                                                strokeWidth = 2.dp
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(
+                                                text = "Loading...",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                            )
+                                        }
+                                    } else {
+                                        Text(text = task.assignees.joinToString { assigneeId ->
+                                            val userName = userNames[assigneeId] ?: assigneeId
+                                            if (assigneeId == currentUser?._id) {
+                                                "$userName (Me)"
+                                            } else {
+                                                userName
+                                            }
+                                        })
+                                    }
                                 }
                                 Row {
                                     Text(
@@ -904,7 +956,11 @@ private fun ProjectBody(
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
                                                 Text(
-                                                    text = selectedUserToRemove.ifEmpty { "Select user" },
+                                                    text = if (selectedUserToRemove.isNotEmpty()) {
+                                                        userNames[selectedUserToRemove] ?: selectedUserToRemove
+                                                    } else {
+                                                        "Select user"
+                                                    },
                                                     textAlign = TextAlign.Start,
                                                     style = MaterialTheme.typography.bodyMedium
                                                 )
@@ -937,14 +993,7 @@ private fun ProjectBody(
                                                 removableMembers.forEach { member ->
                                                     DropdownMenuItem(
                                                         text = { 
-                                                            Column {
-                                                                Text(member.userId)
-                                                                Text(
-                                                                    text = member.role.replaceFirstChar { it.uppercase() },
-                                                                    style = MaterialTheme.typography.bodySmall,
-                                                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                                                                )
-                                                            }
+                                                            Text(userNames[member.userId] ?: member.userId)
                                                         },
                                                         onClick = {
                                                             selectedUserToRemove = member.userId
@@ -1248,7 +1297,18 @@ private fun ProjectBody(
                         )
                         Box {
                             OutlinedTextField(
-                                value = assignee,
+                                value = if (isLoadingUserNames && assignee.isNotEmpty()) {
+                                    "Loading..."
+                                } else if (assignee.isNotEmpty()) {
+                                    val userName = userNames[assignee] ?: assignee
+                                    if (assignee == currentUser?._id) {
+                                        "$userName (Me)"
+                                    } else {
+                                        userName
+                                    }
+                                } else {
+                                    ""
+                                },
                                 onValueChange = { },
                                 readOnly = true,
                                 label = { Text("Select Assignee") },
@@ -1271,26 +1331,43 @@ private fun ProjectBody(
                                 expanded = assigneeExpanded,
                                 onDismissRequest = { assigneeExpanded = false }
                             ) {
-                                allMembers.forEach { member ->
+                                if (isLoadingUserNames) {
                                     DropdownMenuItem(
                                         text = {
-                                            Column {
-                                                Text(
-                                                    text = member.userId,
-                                                    style = MaterialTheme.typography.bodyMedium
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                CircularProgressIndicator(
+                                                    modifier = Modifier.size(16.dp),
+                                                    strokeWidth = 2.dp
                                                 )
-                                                Text(
-                                                    text = member.role.replaceFirstChar { it.uppercase() },
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text("Loading members...")
                                             }
                                         },
-                                        onClick = {
-                                            assignee = member.userId
-                                            assigneeExpanded = false
-                                        }
+                                        onClick = { }
                                     )
+                                } else {
+                                    allMembers.forEach { member ->
+                                        DropdownMenuItem(
+                                            text = {
+                                                val userName = userNames[member.userId] ?: member.userId
+                                                val displayName = if (member.userId == currentUser?._id) {
+                                                    "$userName (Me)"
+                                                } else {
+                                                    userName
+                                                }
+                                                Text(
+                                                    text = displayName,
+                                                    style = MaterialTheme.typography.bodyMedium
+                                                )
+                                            },
+                                            onClick = {
+                                                assignee = member.userId
+                                                assigneeExpanded = false
+                                            }
+                                        )
+                                    }
                                 }
                             }
                         }
