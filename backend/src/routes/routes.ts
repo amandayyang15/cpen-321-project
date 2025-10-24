@@ -8,6 +8,8 @@ import mediaRoutes from './media.routes';
 import projectRoutes from './project.routes';
 import usersRoutes from './user.routes';
 import expenseRoutes from './expense.routes';
+import taskRoutes from './task.routes';
+
 
 const router = Router();
 
@@ -24,5 +26,8 @@ router.use('/projects', authenticateToken, projectRoutes);
 router.use('/chat', authenticateToken, chatRoutes);
 
 router.use('/expenses', authenticateToken, expenseRoutes);
+
+router.use('/tasks', authenticateToken, taskRoutes);
+
 
 export default router;

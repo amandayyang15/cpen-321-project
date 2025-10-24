@@ -79,32 +79,46 @@ export class TaskModel {
 
   async create(taskData: Partial<ITask>): Promise<ITask> {
     try {
-      return await this.task.create(taskData);
+      console.log('🗄️ TaskModel.create() called with data:', JSON.stringify(taskData, null, 2));
+      const result = await this.task.create(taskData);
+      console.log('✅ TaskModel.create() successful, created task:', result._id.toString());
+      console.log('📋 Created task details:', JSON.stringify(result, null, 2));
+      return result;
     } catch (error) {
-      console.error('Error creating task:', error);
+      console.error('❌ TaskModel.create() error:', error);
+      if (error instanceof Error) {
+        console.error('Error details:', error.message);
+        console.error('Error stack:', error.stack);
+      }
       throw new Error('Failed to create task');
     }
   }
 
   async findById(taskId: mongoose.Types.ObjectId): Promise<ITask | null> {
     try {
-      return await this.task.findById(taskId)
-        .populate('assignees', 'name email profilePicture')
-        .populate('createdBy', 'name email profilePicture');
+      return await this.task.findById(taskId);
     } catch (error) {
       console.error('Error finding task by ID:', error);
+      if (error instanceof Error) {
+        console.error('Error details:', error.message);
+      }
       throw new Error('Failed to find task');
     }
   }
 
   async findByProjectId(projectId: mongoose.Types.ObjectId): Promise<ITask[]> {
     try {
-      return await this.task.find({ projectId })
-        .populate('assignees', 'name email profilePicture')
-        .populate('createdBy', 'name email profilePicture')
+      console.log('🔍 TaskModel.findByProjectId() called for project:', projectId.toString());
+      const tasks = await this.task.find({ projectId })
         .sort({ createdAt: -1 });
+      console.log('✅ TaskModel.findByProjectId() found', tasks.length, 'tasks');
+      console.log('📋 Tasks details:', JSON.stringify(tasks, null, 2));
+      return tasks;
     } catch (error) {
-      console.error('Error finding tasks by project:', error);
+      console.error('❌ TaskModel.findByProjectId() error:', error);
+      if (error instanceof Error) {
+        console.error('Error details:', error.message);
+      }
       throw new Error('Failed to find tasks');
     }
   }
@@ -113,11 +127,12 @@ export class TaskModel {
     try {
       return await this.task.find({ assignees: assigneeId })
         .populate('projectId', 'name')
-        .populate('assignees', 'name email profilePicture')
-        .populate('createdBy', 'name email profilePicture')
         .sort({ deadline: 1 });
     } catch (error) {
       console.error('Error finding tasks by assignee:', error);
+      if (error instanceof Error) {
+        console.error('Error details:', error.message);
+      }
       throw new Error('Failed to find tasks');
     }
   }
@@ -130,11 +145,12 @@ export class TaskModel {
       }
       
       return await this.task.find(query)
-        .populate('assignees', 'name email profilePicture')
-        .populate('createdBy', 'name email profilePicture')
         .sort({ createdAt: -1 });
     } catch (error) {
       console.error('Error finding tasks by status:', error);
+      if (error instanceof Error) {
+        console.error('Error details:', error.message);
+      }
       throw new Error('Failed to find tasks');
     }
   }
@@ -149,22 +165,24 @@ export class TaskModel {
         status: { $nin: ['completed'] }
       })
         .populate('projectId', 'name')
-        .populate('assignees', 'name email profilePicture')
-        .populate('createdBy', 'name email profilePicture')
         .sort({ deadline: 1 });
     } catch (error) {
       console.error('Error finding upcoming deadlines:', error);
+      if (error instanceof Error) {
+        console.error('Error details:', error.message);
+      }
       throw new Error('Failed to find upcoming deadlines');
     }
   }
 
   async update(taskId: mongoose.Types.ObjectId, updateData: Partial<ITask>): Promise<ITask | null> {
     try {
-      return await this.task.findByIdAndUpdate(taskId, updateData, { new: true })
-        .populate('assignees', 'name email profilePicture')
-        .populate('createdBy', 'name email profilePicture');
+      return await this.task.findByIdAndUpdate(taskId, updateData, { new: true });
     } catch (error) {
       console.error('Error updating task:', error);
+      if (error instanceof Error) {
+        console.error('Error details:', error.message);
+      }
       throw new Error('Failed to update task');
     }
   }
@@ -174,6 +192,9 @@ export class TaskModel {
       await this.task.findByIdAndDelete(taskId);
     } catch (error) {
       console.error('Error deleting task:', error);
+      if (error instanceof Error) {
+        console.error('Error details:', error.message);
+      }
       throw new Error('Failed to delete task');
     }
   }
@@ -184,9 +205,12 @@ export class TaskModel {
         taskId,
         { $addToSet: { assignees: assigneeId } },
         { new: true }
-      ).populate('assignees', 'name email profilePicture');
+      );
     } catch (error) {
       console.error('Error adding assignee to task:', error);
+      if (error instanceof Error) {
+        console.error('Error details:', error.message);
+      }
       throw new Error('Failed to add assignee to task');
     }
   }
@@ -197,10 +221,30 @@ export class TaskModel {
         taskId,
         { $pull: { assignees: assigneeId } },
         { new: true }
-      ).populate('assignees', 'name email profilePicture');
+      );
     } catch (error) {
       console.error('Error removing assignee from task:', error);
+      if (error instanceof Error) {
+        console.error('Error details:', error.message);
+      }
       throw new Error('Failed to remove assignee from task');
+    }
+  }
+
+  async getAllTasks(): Promise<ITask[]> {
+    try {
+      console.log('🔍 TaskModel.getAllTasks() called');
+      const tasks = await this.task.find({})
+        .populate('projectId', 'name')
+        .sort({ createdAt: -1 });
+      console.log('✅ TaskModel.getAllTasks() found', tasks.length, 'tasks');
+      return tasks;
+    } catch (error) {
+      console.error('❌ TaskModel.getAllTasks() error:', error);
+      if (error instanceof Error) {
+        console.error('Error details:', error.message);
+      }
+      throw new Error('Failed to get all tasks');
     }
   }
 }

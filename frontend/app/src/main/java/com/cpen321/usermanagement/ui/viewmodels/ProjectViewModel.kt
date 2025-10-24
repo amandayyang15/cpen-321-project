@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.cpen321.usermanagement.data.remote.dto.ChatMessage
 import com.cpen321.usermanagement.data.remote.dto.Project
+import com.cpen321.usermanagement.data.repository.ExpenseRepository
 import com.cpen321.usermanagement.data.repository.ProjectRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -12,6 +13,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import com.cpen321.usermanagement.data.remote.dto.Task
+import com.cpen321.usermanagement.data.repository.TaskRepository
+
 
 data class ProjectUiState(
     // Loading states
@@ -34,7 +38,9 @@ data class ProjectUiState(
 
 @HiltViewModel
 class ProjectViewModel @Inject constructor(
-    private val projectRepository: ProjectRepository
+    private val projectRepository: ProjectRepository,
+    private val expenseRepository: ExpenseRepository,
+    private val taskRepository: TaskRepository
 ) : ViewModel() {
 
     companion object {
@@ -43,19 +49,217 @@ class ProjectViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(ProjectUiState())
     val uiState: StateFlow<ProjectUiState> = _uiState.asStateFlow()
-    
+
     private var isCreatingProject = false
     private var isJoiningProject = false
+    private var isLoadingTasks = false
+    private var isCreatingTask = false
 
     init {
         loadUserProjects()
     }
 
+    // Store tasks per project ID
+    private val _tasksByProject = MutableStateFlow<Map<String, List<Task>>>(emptyMap())
+    val tasksByProject: StateFlow<Map<String, List<Task>>> = _tasksByProject
+
+    // Get tasks for current project
+    fun getTasksForProject(projectId: String): List<Task> {
+        Log.d(TAG, "=== getTasksForProject called ===")
+        Log.d(TAG, "Requested projectId: $projectId")
+        Log.d(TAG, "Current _tasksByProject state: ${_tasksByProject.value}")
+        Log.d(TAG, "Keys in _tasksByProject: ${_tasksByProject.value.keys}")
+        
+        val tasks = _tasksByProject.value[projectId] ?: emptyList()
+        Log.d(TAG, "getTasksForProject($projectId): returning ${tasks.size} tasks")
+        
+        if (tasks.isEmpty()) {
+            Log.d(TAG, "No tasks found for project $projectId")
+            Log.d(TAG, "Available projects with tasks:")
+            _tasksByProject.value.forEach { (storedProjectId, storedTasks) ->
+                Log.d(TAG, "  Project $storedProjectId: ${storedTasks.size} tasks")
+                storedTasks.forEach { task ->
+                    Log.d(TAG, "    Task: ${task.id} - ${task.title} (projectId: ${task.projectId})")
+                }
+            }
+        } else {
+            tasks.forEach { task ->
+                Log.d(TAG, "Task: ${task.id} - ${task.title} (projectId: ${task.projectId})")
+                Log.d(TAG, "Task projectId matches requested projectId: ${task.projectId == projectId}")
+            }
+        }
+        Log.d(TAG, "=== getTasksForProject completed ===")
+        return tasks
+    }
+
+    fun clearTasks() {
+        Log.d(TAG, "Clearing all tasks")
+        _tasksByProject.value = emptyMap()
+    }
+
+    fun clearTasksForProject(projectId: String) {
+        Log.d(TAG, "Clearing tasks for project: $projectId")
+        val currentTasks = _tasksByProject.value.toMutableMap()
+        currentTasks.remove(projectId)
+        _tasksByProject.value = currentTasks
+    }
+
+    fun loadProjectTasks(projectId: String) {
+        // Prevent multiple simultaneous calls
+        if (isLoadingTasks) {
+            Log.d(TAG, "loadProjectTasks already in progress, ignoring duplicate call for project: $projectId")
+            return
+        }
+        
+        Log.d(TAG, "=== STARTING LOAD PROJECT TASKS ===")
+        Log.d(TAG, "Loading tasks for project: $projectId")
+        Log.d(TAG, "Project ID type: ${projectId::class.java.simpleName}")
+        Log.d(TAG, "Project ID length: ${projectId.length}")
+        Log.d(TAG, "isLoadingTasks flag: $isLoadingTasks")
+        viewModelScope.launch {
+            isLoadingTasks = true
+            Log.d(TAG, "Set isLoadingTasks to true")
+            _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
+            try {
+                Log.d(TAG, "About to call taskRepository.getProjectTasks($projectId)")
+                val tasks = taskRepository.getProjectTasks(projectId)
+                val currentTasks = _tasksByProject.value.toMutableMap()
+                
+                Log.d(TAG, "loadProjectTasks($projectId): received ${tasks.size} tasks from server")
+                Log.d(TAG, "Current local tasks for project $projectId: ${currentTasks[projectId]?.size ?: 0}")
+                
+                tasks.forEach { task ->
+                    Log.d(TAG, "Server task: ${task.id} - ${task.title} (projectId: ${task.projectId})")
+                    Log.d(TAG, "Task belongs to project: ${task.projectId}, Loading for project: $projectId")
+                }
+                
+                // Clear existing tasks for this project first to prevent duplicates
+                currentTasks.remove(projectId)
+                Log.d(TAG, "Cleared existing tasks for project: $projectId")
+                
+                // Then add the fresh tasks from server
+                currentTasks[projectId] = tasks
+                _tasksByProject.value = currentTasks
+
+                Log.d(TAG, "Replaced local tasks with ${tasks.size} server tasks for project: $projectId")
+                Log.d(TAG, "Updated _tasksByProject state: ${_tasksByProject.value}")
+                Log.d(TAG, "Current tasksByProject keys: ${_tasksByProject.value.keys}")
+                Log.d(TAG, "Tasks stored for each project:")
+                _tasksByProject.value.forEach { (storedProjectId, storedTasks) ->
+                    Log.d(TAG, "  Project $storedProjectId: ${storedTasks.size} tasks")
+                    storedTasks.forEach { task ->
+                        Log.d(TAG, "    Task: ${task.id} - ${task.title} (projectId: ${task.projectId})")
+                    }
+                }
+                
+                // Verify the tasks are stored correctly
+                val storedTasks = _tasksByProject.value[projectId]
+                Log.d(TAG, "Verification: Stored tasks for project $projectId: ${storedTasks?.size ?: 0}")
+                storedTasks?.forEach { task ->
+                    Log.d(TAG, "  Stored task: ${task.id} - ${task.title} (projectId: ${task.projectId})")
+                }
+                _uiState.value = _uiState.value.copy(isLoading = false)
+                Log.d(TAG, "=== LOAD PROJECT TASKS COMPLETED ===")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to load tasks", e)
+                _uiState.value = _uiState.value.copy(isLoading = false, errorMessage = "Failed to load tasks: ${e.message}")
+                Log.d(TAG, "=== LOAD PROJECT TASKS FAILED ===")
+            } finally {
+                isLoadingTasks = false
+                Log.d(TAG, "Reset isLoadingTasks to false")
+                Log.d(TAG, "=== LOAD PROJECT TASKS FINALLY BLOCK ===")
+            }
+        }
+    }
+
+    fun createTask(
+        projectId: String,
+        name: String,
+        assignee: String,
+        status: String,
+        deadline: String?
+    ) {
+        if (name.isBlank()) {
+            _uiState.value = _uiState.value.copy(
+                errorMessage = "Task name cannot be empty"
+            )
+            return
+        }
+
+        if (assignee.isBlank()) {
+            _uiState.value = _uiState.value.copy(
+                errorMessage = "Assignee cannot be empty"
+            )
+            return
+        }
+
+        // Prevent multiple simultaneous task creation calls
+        if (isCreatingTask) {
+            Log.d(TAG, "Task creation already in progress, ignoring duplicate call")
+            return
+        }
+
+        Log.d(TAG, "=== STARTING TASK CREATION ===")
+        Log.d(TAG, "Creating task: $name for project: $projectId")
+        Log.d(TAG, "Project ID type: ${projectId::class.java.simpleName}")
+        Log.d(TAG, "Project ID length: ${projectId.length}")
+        Log.d(TAG, "isCreatingTask flag: $isCreatingTask")
+        
+        // Set the flag immediately to prevent race conditions
+        isCreatingTask = true
+        Log.d(TAG, "Set isCreatingTask to true")
+        
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isCreating = true, errorMessage = null)
+
+            try {
+                val task = taskRepository.createTask(projectId, name.trim(), assignee.trim(), status, deadline)
+                Log.d(TAG, "Task created successfully: ${task.id}")
+
+                // Validate that the created task belongs to the correct project
+                if (task.projectId != projectId) {
+                    Log.e(TAG, "ERROR: Created task belongs to project ${task.projectId} but was created for project $projectId")
+                    _uiState.value = _uiState.value.copy(
+                        isCreating = false,
+                        errorMessage = "Task creation failed: Project ID mismatch"
+                    )
+                    return@launch
+                }
+
+                // Reload tasks from server to ensure consistency and prevent duplicates
+                // This ensures we have the latest state from the server
+                Log.d(TAG, "createTask: Task ${task.id} (${task.title}) created successfully for project $projectId")
+                Log.d(TAG, "Task projectId from server: ${task.projectId}")
+                
+                // Reload tasks from server to get the complete, up-to-date list
+                loadProjectTasks(projectId)
+
+                _uiState.value = _uiState.value.copy(
+                    isCreating = false,
+                    message = "Task created successfully"
+                )
+
+                Log.d(TAG, "Task created successfully, reloading from server")
+                Log.d(TAG, "=== TASK CREATION COMPLETED ===")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to create task", e)
+                _uiState.value = _uiState.value.copy(
+                    isCreating = false,
+                    errorMessage = "Failed to create task: ${e.message}"
+                )
+                Log.d(TAG, "=== TASK CREATION FAILED ===")
+            } finally {
+                isCreatingTask = false
+                Log.d(TAG, "Reset isCreatingTask to false")
+                Log.d(TAG, "=== TASK CREATION FINALLY BLOCK ===")
+            }
+        }
+    }
     fun loadUserProjects() {
         Log.d(TAG, "Loading user projects...")
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
-            
+
             projectRepository.getUserProjects()
                 .onSuccess { projects ->
                     Log.d(TAG, "Successfully loaded ${projects.size} projects: ${projects.map { it.name }}")
@@ -93,7 +297,7 @@ class ProjectViewModel @Inject constructor(
         isCreatingProject = true
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isCreating = true, errorMessage = null)
-            
+
             projectRepository.createProject(name.trim(), description?.trim())
                 .onSuccess { project ->
                     Log.d(TAG, "Project created successfully: ${project.id}")
@@ -101,7 +305,7 @@ class ProjectViewModel @Inject constructor(
                     val currentProjects = _uiState.value.projects
                     val updatedProjects = listOf(project) + currentProjects
                     Log.d(TAG, "Updated projects list: ${updatedProjects.map { it.name }}")
-                    
+
                     // Force state update with explicit copy
                     val newState = _uiState.value.copy(
                         isCreating = false,
@@ -110,7 +314,7 @@ class ProjectViewModel @Inject constructor(
                     )
                     _uiState.value = newState
                     isCreatingProject = false
-                    
+
                     Log.d(TAG, "State updated - projects count: ${_uiState.value.projects.size}")
                 }
                 .onFailure { error ->
@@ -142,7 +346,7 @@ class ProjectViewModel @Inject constructor(
         isJoiningProject = true
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isCreating = true, errorMessage = null)
-            
+
             projectRepository.joinProject(invitationCode.trim())
                 .onSuccess { project ->
                     Log.d(TAG, "Successfully joined project: ${project.id}")
@@ -150,7 +354,7 @@ class ProjectViewModel @Inject constructor(
                     val currentProjects = _uiState.value.projects
                     val updatedProjects = listOf(project) + currentProjects
                     Log.d(TAG, "Updated projects list: ${updatedProjects.map { it.name }}")
-                    
+
                     // Force state update with explicit copy
                     val newState = _uiState.value.copy(
                         isCreating = false,
@@ -159,7 +363,7 @@ class ProjectViewModel @Inject constructor(
                     )
                     _uiState.value = newState
                     isJoiningProject = false
-                    
+
                     Log.d(TAG, "State updated - projects count: ${_uiState.value.projects.size}")
                 }
                 .onFailure { error ->
@@ -176,7 +380,7 @@ class ProjectViewModel @Inject constructor(
     fun updateProject(projectId: String, name: String? = null, description: String? = null) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isUpdating = true, errorMessage = null)
-            
+
             projectRepository.updateProject(projectId, name, description)
                 .onSuccess { updatedProject ->
                     Log.d(TAG, "Project updated: ${updatedProject.id}")
@@ -203,7 +407,7 @@ class ProjectViewModel @Inject constructor(
     fun deleteProject(projectId: String) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isDeleting = true, errorMessage = null)
-            
+
             projectRepository.deleteProject(projectId)
                 .onSuccess {
                     Log.d(TAG, "Project deleted: $projectId")
@@ -226,14 +430,14 @@ class ProjectViewModel @Inject constructor(
     }
 
     fun selectProject(project: Project) {
-        Log.d(TAG, "selectProject called with project: ${project.name} (${project.id})")
+        Log.d(TAG, "🚩 selectProject called with project: ${project.name} (${project.id})")
         _uiState.value = _uiState.value.copy(selectedProject = project)
         Log.d(TAG, "selectedProject updated: ${_uiState.value.selectedProject?.name}")
     }
 
     fun addResource(projectId: String, resourceName: String, link: String) {
         Log.d(TAG, "addResource called with projectId: $projectId, resourceName: '$resourceName', link: '$link'")
-        
+
         if (resourceName.isBlank()) {
             Log.d(TAG, "Resource name is blank, showing error")
             _uiState.value = _uiState.value.copy(
@@ -252,7 +456,7 @@ class ProjectViewModel @Inject constructor(
 
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isCreating = true, errorMessage = null)
-            
+
             projectRepository.addResource(projectId, resourceName.trim(), link.trim())
                 .onSuccess { project ->
                     Log.d(TAG, "Resource added successfully to project: ${project.id}")
@@ -311,7 +515,7 @@ class ProjectViewModel @Inject constructor(
 
     fun sendMessage(projectId: String, content: String) {
         Log.d(TAG, "sendMessage called with projectId: $projectId, content: '$content'")
-        
+
         if (content.isBlank()) {
             Log.d(TAG, "Message content is blank, showing error")
             _uiState.value = _uiState.value.copy(
@@ -330,7 +534,7 @@ class ProjectViewModel @Inject constructor(
 
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isSending = true, errorMessage = null)
-            
+
             projectRepository.sendMessage(projectId, content.trim())
                 .onSuccess { message ->
                     Log.d(TAG, "Message sent successfully: ${message.id}")
@@ -357,7 +561,7 @@ class ProjectViewModel @Inject constructor(
         Log.d(TAG, "loadMessages called with projectId: $projectId")
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoadingMessages = true, errorMessage = null)
-            
+
             projectRepository.getMessages(projectId)
                 .onSuccess { messages ->
                     Log.d(TAG, "Messages loaded successfully: ${messages.size} messages")
@@ -381,7 +585,7 @@ class ProjectViewModel @Inject constructor(
         Log.d(TAG, "deleteMessage called with projectId: $projectId, messageId: $messageId")
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isDeleting = true, errorMessage = null)
-            
+
             projectRepository.deleteMessage(projectId, messageId)
                 .onSuccess {
                     Log.d(TAG, "Message deleted successfully: $messageId")

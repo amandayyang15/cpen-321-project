@@ -159,6 +159,7 @@ fun HomePage(
                             project = project,
                             onProjectClick = {
                                 Log.d("HomePage", "Project clicked: ${project.id}")
+                                projectViewModel.selectProject(project)
                                 navigationStateManager.navigateToProjectView()
                             }
                         )

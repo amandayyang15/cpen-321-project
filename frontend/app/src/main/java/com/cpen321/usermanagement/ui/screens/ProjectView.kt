@@ -1,6 +1,8 @@
 package com.cpen321.usermanagement.ui.screens
-
+import retrofit2.http.GET
 import Icon
+import androidx.compose.runtime.collectAsState
+import com.cpen321.usermanagement.data.remote.dto.Task
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -22,7 +24,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -37,6 +38,10 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
@@ -59,16 +64,24 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.cpen321.usermanagement.R
 import com.cpen321.usermanagement.data.remote.dto.ChatMessage as BackendChatMessage
 import com.cpen321.usermanagement.data.remote.dto.Resource
 import com.cpen321.usermanagement.ui.navigation.NavigationStateManager
+import com.cpen321.usermanagement.data.remote.dto.ProjectMember
+
 import com.cpen321.usermanagement.ui.theme.LocalSpacing
 import com.cpen321.usermanagement.ui.viewmodels.ProjectViewModel
 import android.widget.Toast
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.platform.LocalContext
+
+import com.cpen321.usermanagement.ui.theme.LocalSpacing
+
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -105,9 +118,9 @@ fun ProjectView(
 ) {
     ProjectContent(
         navigationStateManager = navigationStateManager,
-        projectViewModel = projectViewModel,
-        profileViewModel = profileViewModel,
         expenseRepository = expenseRepository,
+        projectViewModel = projectViewModel,
+        profileViewModel = profileViewModel, // <-- Pass it here
         modifier = modifier
     )
 }
@@ -121,7 +134,7 @@ private fun ProjectContent(
     modifier: Modifier = Modifier
 ) {
     val uiState by projectViewModel.uiState.collectAsState()
-    
+
     // Auto-select first project if none is selected
     LaunchedEffect(uiState.projects, uiState.selectedProject) {
         if (uiState.projects.isNotEmpty() && uiState.selectedProject == null) {
@@ -129,7 +142,7 @@ private fun ProjectContent(
             projectViewModel.selectProject(uiState.projects.first())
         }
     }
-    
+
     Scaffold(
         modifier = modifier,
         topBar = {
@@ -244,8 +257,14 @@ private fun ProjectBody(
     val profileUiState by profileViewModel.uiState.collectAsState()
     val currentProject = uiState.selectedProject
     val currentUser = profileUiState.user
-    val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
     
+    // Debug project changes
+    LaunchedEffect(currentProject) {
+        Log.d("ProjectView", "Current project changed to: ${currentProject?.id} (${currentProject?.name})")
+    }
+    val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
+
+
     var progressExpanded by remember { mutableStateOf(false) }
     var selectedProgress by remember { mutableStateOf("In Progress") }
     var selectedTab by remember { mutableStateOf("Task") }
@@ -255,12 +274,14 @@ private fun ProjectBody(
     var taskProgress by remember { mutableStateOf("In Progress") }
     var deadline by remember { mutableStateOf("") }
     var taskProgressExpanded by remember { mutableStateOf(false) }
-    
+    var assigneeExpanded by remember { mutableStateOf(false) }
+    var selectedDate by remember { mutableStateOf<Long?>(null) }
+
     // Resource state
     var showAddResourceDialog by remember { mutableStateOf(false) }
     var resourceName by remember { mutableStateOf("") }
     var resourceLink by remember { mutableStateOf("") }
-    
+
     // Project Settings state
     var projectName by remember { mutableStateOf("") }
     var selectedUserToRemove by remember { mutableStateOf("") }
@@ -274,10 +295,22 @@ private fun ProjectBody(
     var expensePaidBy by remember { mutableStateOf("") }
     var paidByExpanded by remember { mutableStateOf(false) }
     var selectedUsersForSplit by remember { mutableStateOf(setOf<String>()) }
-    
+
+    // Get actual project members
+    val projectMembers = currentProject?.members ?: emptyList()
+    val ownerMember = currentProject?.let {
+        ProjectMember(userId = it.ownerId, role = "owner", joinedAt = it.createdAt)
+    }
+    // Only add owner if they're not already in projectMembers (avoid duplicates)
+    val allMembers = if (ownerMember != null && !projectMembers.any { it.userId == ownerMember.userId }) {
+        listOf(ownerMember) + projectMembers
+    } else {
+        projectMembers
+    }
+
     // Chat state - now using backend messages from ViewModel
     val backendMessages = uiState.messages
-    
+
     // Load current user profile
     LaunchedEffect(Unit) {
         Log.d("ProjectView", "Loading user profile... Current user in state: ${profileUiState.user?._id}")
@@ -285,12 +318,12 @@ private fun ProjectBody(
             profileViewModel.loadProfile()
         }
     }
-    
+
     // Debug user loading
     LaunchedEffect(currentUser) {
         Log.d("ProjectView", "Current user changed: ${currentUser?._id}, name: ${currentUser?.name}")
     }
-    
+
     // Re-map messages when user profile is loaded to ensure proper alignment
     val mappedMessages = remember(backendMessages, currentUser) {
         Log.d("ProjectView", "Re-mapping messages. Current user: ${currentUser?._id}, Messages count: ${backendMessages?.size ?: 0}")
@@ -299,10 +332,10 @@ private fun ProjectBody(
             Log.d("ProjectView", "Message from ${backendMessage.senderName} (${backendMessage.senderId}) - isFromCurrentUser: $isFromCurrentUser")
             Log.d("ProjectView", "Comparing: '${currentUser?._id}' == '${backendMessage.senderId}' = ${currentUser?._id == backendMessage.senderId}")
             Log.d("ProjectView", "Current user ID: '${currentUser?._id}', Sender ID: '${backendMessage.senderId}'")
-            
+
             // Use the actual comparison result
             val finalIsFromCurrentUser = isFromCurrentUser
-            
+
             ChatMessage(
                 id = backendMessage.id,
                 content = backendMessage.content,
@@ -314,10 +347,10 @@ private fun ProjectBody(
             )
         } ?: emptyList()
     }
-    
+
     // Fetch user names for project members
     var userIdToNameMap by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
-    
+
     // Fetch user names when project changes
     androidx.compose.runtime.LaunchedEffect(currentProject?.id) {
         currentProject?.members?.let { members ->
@@ -332,7 +365,7 @@ private fun ProjectBody(
                                 userMap[member.userId] = user.name
                                 userIdToNameMap = userMap.toMap()
                             }
-                            .onFailure { 
+                            .onFailure {
                                 // Fallback to user ID if name fetch fails
                                 Log.e("ProjectView", "Failed to fetch user: id=${member.userId}")
                                 userMap[member.userId] = member.userId
@@ -343,7 +376,7 @@ private fun ProjectBody(
             }
         }
     }
-    
+
     // Load messages when Chat tab is selected
     androidx.compose.runtime.LaunchedEffect(selectedTab, currentProject?.id) {
         if (selectedTab == "Chat" && currentProject != null) {
@@ -354,7 +387,7 @@ private fun ProjectBody(
             }
         }
     }
-    
+
     // Load expenses when project changes
     androidx.compose.runtime.LaunchedEffect(currentProject?.id) {
         currentProject?.let { project ->
@@ -383,11 +416,22 @@ private fun ProjectBody(
                 }
         }
     }
-    
+
     // Get available users with names (fallback to userId if name not loaded yet)
     val availableUsers = currentProject?.members?.map { member ->
         userIdToNameMap[member.userId] ?: member.userId
     } ?: emptyList()
+
+    // Note: Tasks are now project-specific, so no need to clear when switching projects
+
+    // Load tasks when switching to Task Board tab or when project changes
+    LaunchedEffect(selectedTab, currentProject?.id) {
+        Log.d("ProjectView", "LaunchedEffect triggered - selectedTab: $selectedTab, currentProject: ${currentProject?.id} (${currentProject?.name})")
+        if (selectedTab == "Task" && currentProject != null) {
+            Log.d("ProjectView", "Loading tasks for project: ${currentProject.id} (${currentProject.name})")
+            projectViewModel.loadProjectTasks(currentProject.id)
+        }
+    }
 
     Column(
         modifier = modifier
@@ -403,7 +447,7 @@ private fun ProjectBody(
             horizontalArrangement = Arrangement.spacedBy(spacing.small)
         ) {
             Button(
-                onClick = { 
+                onClick = {
                     Log.d("ProjectView", "Clicked Project Settings")
                     selectedTab = "Project Settings"
                 },
@@ -411,9 +455,9 @@ private fun ProjectBody(
             ) {
                 Text("Project Settings")
             }
-            
+
             Button(
-                onClick = { 
+                onClick = {
                     Log.d("ProjectView", "Clicked Create Task")
                     showCreateTaskDialog = true
                 },
@@ -422,13 +466,13 @@ private fun ProjectBody(
                 Text("Create Task")
             }
         }
-        
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(spacing.small)
         ) {
             Button(
-                onClick = { 
+                onClick = {
                     Log.d("ProjectView", "Clicked Resource")
                     selectedTab = "Resource"
                     // Refresh project data to get latest resources
@@ -438,9 +482,9 @@ private fun ProjectBody(
             ) {
                 Text("Resource")
             }
-            
+
             Button(
-                onClick = { 
+                onClick = {
                     Log.d("ProjectView", "Clicked Chat")
                     selectedTab = "Chat"
                 },
@@ -449,13 +493,13 @@ private fun ProjectBody(
                 Text("Chat")
             }
         }
-        
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(spacing.small)
         ) {
             Button(
-                onClick = { 
+                onClick = {
                     Log.d("ProjectView", "Clicked Expense")
                     selectedTab = "Expense"
                 },
@@ -463,9 +507,9 @@ private fun ProjectBody(
             ) {
                 Text("Expense")
             }
-            
+
             Button(
-                onClick = { 
+                onClick = {
                     Log.d("ProjectView", "Clicked Task Board")
                     selectedTab = "Task"
                 },
@@ -474,7 +518,7 @@ private fun ProjectBody(
                 Text("Task Board")
             }
         }
-        
+
         // Add Expense Button (only show when on Expense tab)
         if (selectedTab == "Expense") {
             Row(
@@ -482,7 +526,7 @@ private fun ProjectBody(
                 horizontalArrangement = Arrangement.Center
             ) {
                 Button(
-                    onClick = { 
+                    onClick = {
                         Log.d("ProjectView", "Clicked Add Expense")
                         showCreateExpenseDialog = true
                     }
@@ -491,7 +535,7 @@ private fun ProjectBody(
                 }
             }
         }
-        
+
         // Add Resource Button (only show when on Resource tab)
         if (selectedTab == "Resource") {
             Row(
@@ -499,7 +543,7 @@ private fun ProjectBody(
                 horizontalArrangement = Arrangement.Center
             ) {
                 Button(
-                    onClick = { 
+                    onClick = {
                         Log.d("ProjectView", "Clicked Add Resource")
                         showAddResourceDialog = true
                     }
@@ -508,7 +552,129 @@ private fun ProjectBody(
                 }
             }
         }
-        
+
+        // Get tasks for current project
+        val tasks = currentProject?.let { 
+            Log.d("ProjectView", "Getting tasks for current project: ${it.id} (${it.name})")
+            val projectTasks = projectViewModel.getTasksForProject(it.id)
+            Log.d("ProjectView", "Retrieved ${projectTasks.size} tasks for project ${it.id}")
+            projectTasks.forEach { task ->
+                Log.d("ProjectView", "Task: ${task.id} - ${task.title} (projectId: ${task.projectId})")
+            }
+            projectTasks
+        } ?: emptyList()
+
+        if (selectedTab == "Task") {
+            Text("Task Board", style = MaterialTheme.typography.titleLarge)
+
+            // Show error message if present
+            if (uiState.errorMessage != null) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer
+                    )
+                ) {
+                    Text(
+                        text = uiState.errorMessage!!,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.padding(8.dp)
+                    )
+                }
+            }
+
+            // Show success message if present
+            if (uiState.message != null && uiState.message!!.contains("Task")) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                    )
+                ) {
+                    Text(
+                        text = uiState.message!!,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.padding(8.dp)
+                    )
+                }
+            }
+
+            if (tasks.isEmpty()) {
+                Text("No tasks yet.")
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f, fill = true), // Ensures it takes available space
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    items(tasks) { task ->
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(8.dp)) {
+                                Row {
+                                    Text(
+                                        text = "Name: ",
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(text = task.title)
+                                }
+                                Row {
+                                    Text(
+                                        text = "Status: ",
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = task.status,
+                                        color = when (task.status.lowercase()) {
+                                            "in_progress" -> Color(0xFFB8860B) // Dark Goldenrod (darker yellow/orange)
+                                            "completed", "done" -> Color(0xFF4CAF50) // Green
+                                            "backlog" -> Color(0xFF9C27B0) // Purple
+                                            "blocked" -> Color(0xFFF44336) // Red
+                                            "not_started" -> Color(0xFF2196F3) // Blue
+                                            else -> Color.Unspecified // Default color
+                                        }
+                                    )
+                                }
+                                Row {
+                                    Text(
+                                        text = "Assignees: ",
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(text = task.assignees.joinToString())
+                                }
+                                Row {
+                                    Text(
+                                        text = "Deadline: ",
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(text = task.deadline?.let { deadline ->
+                                        try {
+                                            // Parse the ISO date string and format it to show only the date
+                                            val inputFormat = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.getDefault())
+                                            val outputFormat = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+                                            val date = inputFormat.parse(deadline)
+                                            outputFormat.format(date)
+                                        } catch (e: Exception) {
+                                            // If parsing fails, try to extract just the date part
+                                            deadline.substringBefore("T")
+                                        }
+                                    } ?: "None")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // Content area below the buttons
         Column(
             modifier = Modifier
@@ -516,166 +682,6 @@ private fun ProjectBody(
                 .padding(top = spacing.large)
         ) {
             when (selectedTab) {
-                "Task" -> {
-                    Text(
-                        text = "Tasks:",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(bottom = spacing.medium)
-                    )
-                    
-                    // Table header
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = spacing.small, vertical = spacing.medium)
-                            .background(
-                                color = MaterialTheme.colorScheme.primaryContainer,
-                                shape = RoundedCornerShape(4.dp)
-                            )
-                            .padding(spacing.medium),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Task Name",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(horizontal = spacing.small),
-                            textAlign = TextAlign.Center
-                        )
-                        Text(
-                            text = "Assignee",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(horizontal = spacing.small),
-                            textAlign = TextAlign.Center
-                        )
-                        Text(
-                            text = "Progress",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(horizontal = spacing.small),
-                            textAlign = TextAlign.Center
-                        )
-                        Text(
-                            text = "Deadline",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(horizontal = spacing.small),
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                    
-                    // Table row
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = spacing.small, vertical = spacing.medium)
-                            .background(
-                                color = MaterialTheme.colorScheme.surfaceVariant,
-                                shape = RoundedCornerShape(4.dp)
-                            )
-                            .padding(spacing.medium),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Task1",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(horizontal = spacing.small),
-                            textAlign = TextAlign.Center
-                        )
-                        Text(
-                            text = "Justin",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(horizontal = spacing.small),
-                            textAlign = TextAlign.Center
-                        )
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(horizontal = spacing.small)
-                        ) {
-                    val backgroundColor = when (selectedProgress) {
-                        "In Progress" -> Color(0xFFFFEB3B) // Yellow
-                        "Done" -> Color(0xFF4CAF50) // Green
-                        "Backlog" -> Color(0xFFFF9800) // Orange
-                        "Blocked" -> Color(0xFFF44336) // Red
-                        else -> MaterialTheme.colorScheme.surfaceVariant
-                    }
-                    
-                    val textColor = when (selectedProgress) {
-                        "In Progress" -> Color.Black
-                        "Done" -> Color.White
-                        "Backlog" -> Color.White
-                        "Blocked" -> Color.White
-                        else -> MaterialTheme.colorScheme.onSurfaceVariant
-                    }
-                            
-                            TextButton(
-                                onClick = { progressExpanded = !progressExpanded },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(
-                                        color = backgroundColor,
-                                        shape = RoundedCornerShape(4.dp)
-                                    )
-                            ) {
-                            Text(
-                                text = selectedProgress,
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontSize = MaterialTheme.typography.labelSmall.fontSize * 0.8f
-                                ),
-                                textAlign = TextAlign.Center,
-                                color = textColor
-                            )
-                            }
-                            DropdownMenu(
-                                expanded = progressExpanded,
-                                onDismissRequest = { progressExpanded = false }
-                            ) {
-                                listOf("In Progress", "Done", "Backlog", "Blocked").forEach { option ->
-                                    DropdownMenuItem(
-                                        text = { Text(option) },
-                                        onClick = {
-                                            selectedProgress = option
-                                            progressExpanded = false
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                        Text(
-                            text = "Oct 22nd",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(horizontal = spacing.small),
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                }
                 "Project Settings" -> {
                     Text(
                         text = "Project Settings:",
@@ -684,7 +690,7 @@ private fun ProjectBody(
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.padding(bottom = spacing.medium)
                     )
-                    
+
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -719,7 +725,7 @@ private fun ProjectBody(
                                 )
                             }
                         }
-                        
+
                         // Delete Project card
                         Box(
                             modifier = Modifier
@@ -751,7 +757,7 @@ private fun ProjectBody(
                                 }
                             }
                         }
-                        
+
                         // Rename Project card
                         Box(
                             modifier = Modifier
@@ -785,7 +791,7 @@ private fun ProjectBody(
                                         )
                                     )
                                     Button(
-                                        onClick = { 
+                                        onClick = {
                                             Log.d("ProjectView", "Rename project to: $projectName")
                                             Toast.makeText(context, "Project renamed to: $projectName", Toast.LENGTH_SHORT).show()
                                         }
@@ -795,7 +801,7 @@ private fun ProjectBody(
                                 }
                             }
                         }
-                        
+
                         // Remove Users card
                         Box(
                             modifier = Modifier
@@ -845,7 +851,7 @@ private fun ProjectBody(
                                         }
                                     }
                                     Button(
-                                        onClick = { 
+                                        onClick = {
                                             Log.d("ProjectView", "Remove user: $selectedUserToRemove")
                                             Toast.makeText(context, "Removed user: $selectedUserToRemove", Toast.LENGTH_SHORT).show()
                                         }
@@ -870,7 +876,7 @@ private fun ProjectBody(
                             color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.padding(bottom = spacing.medium)
                         )
-                        
+
                         // Show refresh button
                         if (uiState.isLoading) {
                             CircularProgressIndicator(
@@ -879,7 +885,7 @@ private fun ProjectBody(
                             )
                         } else {
                             TextButton(
-                                onClick = { 
+                                onClick = {
                                     Log.d("ProjectView", "Manual refresh clicked")
                                     projectViewModel.refreshSelectedProject()
                                 }
@@ -888,7 +894,7 @@ private fun ProjectBody(
                             }
                         }
                     }
-                    
+
                     // Show success message if available
                     if (uiState.message?.contains("Resource added") == true) {
                         Text(
@@ -900,7 +906,7 @@ private fun ProjectBody(
                                 .padding(bottom = spacing.small)
                         )
                     }
-                    
+
                     if (currentProject?.resources?.isNotEmpty() == true) {
                         Column(
                             modifier = Modifier.fillMaxWidth(),
@@ -947,7 +953,7 @@ private fun ProjectBody(
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.padding(bottom = spacing.medium)
                     )
-                    
+
                     if (expenses.isEmpty()) {
                         Text(
                             text = "No expenses added yet",
@@ -1021,7 +1027,7 @@ private fun ProjectBody(
                                 textAlign = TextAlign.Center
                             )
                         }
-                        
+
                         // Scrollable Expense Table Rows
                         Column(
                             modifier = Modifier
@@ -1102,7 +1108,7 @@ private fun ProjectBody(
                 }
             }
         }
-        
+
         // Create Task Dialog
         if (showCreateTaskDialog) {
             AlertDialog(
@@ -1114,36 +1120,103 @@ private fun ProjectBody(
                     Column(
                         verticalArrangement = Arrangement.spacedBy(spacing.medium)
                     ) {
+                        // Task Name Field
                         OutlinedTextField(
                             value = taskName,
                             onValueChange = { taskName = it },
                             label = { Text("Task Name") },
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            placeholder = { Text("Enter task name") }
                         )
-                        OutlinedTextField(
-                            value = assignee,
-                            onValueChange = { assignee = it },
-                            label = { Text("Assignee") },
-                            modifier = Modifier.fillMaxWidth()
+
+                        // Assignee Dropdown - Project Members
+                        Text(
+                            text = "Assignee",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(bottom = 4.dp)
                         )
-                        
-                        // Progress Dropdown
                         Box {
-                            TextButton(
-                                onClick = { taskProgressExpanded = !taskProgressExpanded },
-                                modifier = Modifier.fillMaxWidth()
+                            OutlinedTextField(
+                                value = assignee,
+                                onValueChange = { },
+                                readOnly = true,
+                                label = { Text("Select Assignee") },
+                                placeholder = { Text("Choose a project member") },
+                                trailingIcon = {
+                                    IconButton(
+                                        onClick = { assigneeExpanded = !assigneeExpanded }
+                                    ) {
+                                        Icon(
+                                            imageVector = if (assigneeExpanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                                            contentDescription = "Dropdown"
+                                        )
+                                    }
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { assigneeExpanded = !assigneeExpanded }
+                            )
+                            DropdownMenu(
+                                expanded = assigneeExpanded,
+                                onDismissRequest = { assigneeExpanded = false }
                             ) {
-                                Text(
-                                    text = taskProgress,
-                                    modifier = Modifier.fillMaxWidth(),
-                                    textAlign = TextAlign.Start
-                                )
+                                allMembers.forEach { member ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Column {
+                                                Text(
+                                                    text = member.userId,
+                                                    style = MaterialTheme.typography.bodyMedium
+                                                )
+                                                Text(
+                                                    text = member.role.replaceFirstChar { it.uppercase() },
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                                )
+                                            }
+                                        },
+                                        onClick = {
+                                            assignee = member.userId
+                                            assigneeExpanded = false
+                                        }
+                                    )
+                                }
                             }
+                        }
+
+                        // Status Dropdown - Clear UI
+                        Text(
+                            text = "Status",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(bottom = 4.dp)
+                        )
+                        Box {
+                            OutlinedTextField(
+                                value = taskProgress,
+                                onValueChange = { },
+                                readOnly = true,
+                                label = { Text("Select Status") },
+                                trailingIcon = {
+                                    IconButton(
+                                        onClick = { taskProgressExpanded = !taskProgressExpanded }
+                                    ) {
+                                        Icon(
+                                            imageVector = if (taskProgressExpanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                                            contentDescription = "Dropdown"
+                                        )
+                                    }
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { taskProgressExpanded = !taskProgressExpanded }
+                            )
                             DropdownMenu(
                                 expanded = taskProgressExpanded,
                                 onDismissRequest = { taskProgressExpanded = false }
                             ) {
-                                listOf("In Progress", "Done", "Backlog", "Blocked").forEach { option ->
+                                listOf("In Progress", "Done", "Backlog", "Blocked", "Not Started").forEach { option ->
                                     DropdownMenuItem(
                                         text = { Text(option) },
                                         onClick = {
@@ -1154,25 +1227,90 @@ private fun ProjectBody(
                                 }
                             }
                         }
-                        
+
+                        // Date Picker for Deadline
+                        Text(
+                            text = "Deadline",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(bottom = 4.dp)
+                        )
                         OutlinedTextField(
-                            value = deadline,
-                            onValueChange = { deadline = it },
-                            label = { Text("Deadline") },
-                            modifier = Modifier.fillMaxWidth()
+                            value = if (selectedDate != null) {
+                                val date = java.util.Date(selectedDate!!)
+                                val formatter = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+                                formatter.format(date)
+                            } else "",
+                            onValueChange = { },
+                            readOnly = true,
+                            label = { Text("Select Date") },
+                            trailingIcon = {
+                                IconButton(
+                                    onClick = {
+                                        // Show date picker
+                                        val datePickerDialog = android.app.DatePickerDialog(
+                                            context,
+                                            { _, year, month, dayOfMonth ->
+                                                val calendar = java.util.Calendar.getInstance()
+                                                calendar.set(year, month, dayOfMonth)
+                                                selectedDate = calendar.timeInMillis
+                                                deadline = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(calendar.time)
+                                            },
+                                            java.util.Calendar.getInstance().get(java.util.Calendar.YEAR),
+                                            java.util.Calendar.getInstance().get(java.util.Calendar.MONTH),
+                                            java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_MONTH)
+                                        )
+                                        datePickerDialog.show()
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.DateRange,
+                                        contentDescription = "Date Picker"
+                                    )
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    // Show date picker
+                                    val datePickerDialog = android.app.DatePickerDialog(
+                                        context,
+                                        { _, year, month, dayOfMonth ->
+                                            val calendar = java.util.Calendar.getInstance()
+                                            calendar.set(year, month, dayOfMonth)
+                                            selectedDate = calendar.timeInMillis
+                                            deadline = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(calendar.time)
+                                        },
+                                        java.util.Calendar.getInstance().get(java.util.Calendar.YEAR),
+                                        java.util.Calendar.getInstance().get(java.util.Calendar.MONTH),
+                                        java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_MONTH)
+                                    )
+                                    datePickerDialog.show()
+                                }
                         )
                     }
                 },
                 confirmButton = {
                     Button(
                         onClick = {
-                            Log.d("ProjectView", "Task created: $taskName, $assignee, $taskProgress, $deadline")
-                            Toast.makeText(context, "Task created: $taskName", Toast.LENGTH_SHORT).show()
+                            Log.d("ProjectView", "Creating task: $taskName, $assignee, $taskProgress, $deadline")
+                            currentProject?.let { project ->
+                                projectViewModel.createTask(
+                                    projectId = project.id,
+                                    name = taskName,
+                                    assignee = assignee,
+                                    status = taskProgress,
+                                    deadline = deadline.takeIf { it.isNotBlank() }
+                                )
+                            }
                             showCreateTaskDialog = false
                             taskName = ""
                             assignee = ""
                             taskProgress = "In Progress"
                             deadline = ""
+                            selectedDate = null
+                            assigneeExpanded = false
+                            taskProgressExpanded = false
                         }
                     ) {
                         Text("Create")
@@ -1180,12 +1318,15 @@ private fun ProjectBody(
                 },
                 dismissButton = {
                     TextButton(
-                        onClick = { 
+                        onClick = {
                             showCreateTaskDialog = false
                             taskName = ""
                             assignee = ""
                             taskProgress = "In Progress"
                             deadline = ""
+                            selectedDate = null
+                            assigneeExpanded = false
+                            taskProgressExpanded = false
                         }
                     ) {
                         Text("Cancel")
@@ -1193,7 +1334,7 @@ private fun ProjectBody(
                 }
             )
         }
-        
+
         // Create Expense Dialog
         if (showCreateExpenseDialog) {
             AlertDialog(
@@ -1211,14 +1352,14 @@ private fun ProjectBody(
                             label = { Text("Description") },
                             modifier = Modifier.fillMaxWidth()
                         )
-                        
+
                         OutlinedTextField(
                             value = expenseAmount,
                             onValueChange = { expenseAmount = it },
                             label = { Text("Amount ($)") },
                             modifier = Modifier.fillMaxWidth()
                         )
-                        
+
                         // Paid By Dropdown
                         Text(
                             text = "Paid By:",
@@ -1251,7 +1392,7 @@ private fun ProjectBody(
                                 }
                             }
                         }
-                        
+
                         // Split Between Multi-select
                         Text(
                             text = "Split between:",
@@ -1281,7 +1422,7 @@ private fun ProjectBody(
                                 }
                             }
                         }
-                        
+
                         if (selectedUsersForSplit.isNotEmpty()) {
                             Text(
                                 text = "Selected: ${selectedUsersForSplit.joinToString(", ")}",
@@ -1295,19 +1436,19 @@ private fun ProjectBody(
                     Button(
                         onClick = {
                             val amount = expenseAmount.toDoubleOrNull()
-                            if (expenseDescription.isNotBlank() && 
-                                amount != null && amount > 0 && 
-                                expensePaidBy.isNotBlank() && 
+                            if (expenseDescription.isNotBlank() &&
+                                amount != null && amount > 0 &&
+                                expensePaidBy.isNotBlank() &&
                                 selectedUsersForSplit.isNotEmpty() &&
                                 currentProject != null) {
-                                
+
                                 // Map names back to user IDs
                                 val nameToIdMap = userIdToNameMap.entries.associate { it.value to it.key }
                                 val paidByUserId = nameToIdMap[expensePaidBy] ?: expensePaidBy
                                 val splitBetweenUserIds = selectedUsersForSplit.map { name ->
                                     nameToIdMap[name] ?: name
                                 }
-                                
+
                                 // Save expense to database
                                 coroutineScope.launch {
                                     expenseRepository.createExpense(
@@ -1328,10 +1469,10 @@ private fun ProjectBody(
                                             amountPerPerson = createdExpense.amountPerPerson
                                         )
                                         expenses = expenses + newExpense
-                                        
+
                                         Log.d("ProjectView", "Expense created and saved: $newExpense")
                                         Toast.makeText(context, "Expense added: $expenseDescription", Toast.LENGTH_SHORT).show()
-                                        
+
                                         // Reset form
                                         showCreateExpenseDialog = false
                                         expenseDescription = ""
@@ -1353,7 +1494,7 @@ private fun ProjectBody(
                 },
                 dismissButton = {
                     TextButton(
-                        onClick = { 
+                        onClick = {
                             showCreateExpenseDialog = false
                             expenseDescription = ""
                             expenseAmount = ""
@@ -1366,11 +1507,11 @@ private fun ProjectBody(
                 }
             )
         }
-        
+
         // Add Resource Dialog
         if (showAddResourceDialog) {
             AddResourceDialog(
-                onDismiss = { 
+                onDismiss = {
                     showAddResourceDialog = false
                     resourceName = ""
                     resourceLink = ""
@@ -1402,48 +1543,7 @@ private fun ProjectBody(
     }
 }
 
-@Composable
-private fun ResourceItem(
-    resource: Resource,
-    modifier: Modifier = Modifier
-) {
-    val spacing = LocalSpacing.current
-    val context = LocalContext.current
-    
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = spacing.small, vertical = spacing.extraSmall)
-            .background(
-                color = MaterialTheme.colorScheme.primaryContainer,
-                shape = RoundedCornerShape(8.dp)
-            )
-            .padding(spacing.medium)
-    ) {
-        Column {
-            Text(
-                text = resource.resourceName,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                fontWeight = FontWeight.Medium
-            )
-            Spacer(modifier = Modifier.height(spacing.extraSmall))
-            Text(
-                text = resource.link,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.clickable {
-                    try {
-                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(resource.link))
-                        context.startActivity(intent)
-                    } catch (e: Exception) {
-                        Toast.makeText(context, "Could not open link", Toast.LENGTH_SHORT).show()
-                    }
-                }
-            )
-        }
-    }
-}
+
 
 @Composable
 private fun AddResourceDialog(
@@ -1488,7 +1588,7 @@ private fun AddResourceDialog(
                         { Text("Resource link is required") }
                     } else null
                 )
-                
+
                 // Display error message if present
                 if (errorMessage != null) {
                     Spacer(modifier = Modifier.height(8.dp))
@@ -1530,7 +1630,6 @@ private fun AddResourceDialog(
         }
     )
 }
-
 @Composable
 fun ChatScreen(
     messages: List<ChatMessage> = emptyList(),
@@ -1543,7 +1642,7 @@ fun ChatScreen(
     var messageText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
-    
+
 
     // Auto-scroll to bottom when new messages arrive
     LaunchedEffect(messages.size) {
@@ -1635,7 +1734,7 @@ private fun ChatMessageItem(
     modifier: Modifier = Modifier
 ) {
     val spacing = LocalSpacing.current
-    
+
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = if (message.isFromCurrentUser) {
@@ -1672,7 +1771,7 @@ private fun ChatMessageItem(
                     )
                     Spacer(modifier = Modifier.height(spacing.extraSmall))
                 }
-                
+
                 Text(
                     text = message.content,
                     style = MaterialTheme.typography.bodyMedium,
@@ -1682,9 +1781,9 @@ private fun ChatMessageItem(
                         MaterialTheme.colorScheme.onSurfaceVariant
                     }
                 )
-                
+
                 Spacer(modifier = Modifier.height(spacing.extraSmall))
-                
+
                 Text(
                     text = formatTimestamp(message.timestamp),
                     style = MaterialTheme.typography.labelSmall,
@@ -1708,7 +1807,7 @@ private fun MessageInput(
     modifier: Modifier = Modifier
 ) {
     val spacing = LocalSpacing.current
-    
+
     Row(
         modifier = modifier.fillMaxWidth(),
         verticalAlignment = Alignment.Bottom,
@@ -1731,7 +1830,7 @@ private fun MessageInput(
                 unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
             )
         )
-        
+
         FloatingActionButton(
             onClick = if (isSending) { {} } else { onSendClick },
             modifier = Modifier.size(48.dp),
@@ -1746,7 +1845,7 @@ private fun MessageInput(
                 )
             } else {
                 Icon(
-                    imageVector = Icons.Default.Send,
+                    imageVector = Icons.AutoMirrored.Filled.Send,
                     contentDescription = "Send message",
                     modifier = Modifier.size(20.dp)
                 )
@@ -1755,10 +1854,53 @@ private fun MessageInput(
     }
 }
 
+@Composable
+private fun ResourceItem(
+    resource: Resource,
+    modifier: Modifier = Modifier
+) {
+    val spacing = LocalSpacing.current
+    val context = LocalContext.current
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = spacing.small, vertical = spacing.extraSmall)
+            .background(
+                color = MaterialTheme.colorScheme.primaryContainer,
+                shape = RoundedCornerShape(8.dp)
+            )
+            .padding(spacing.medium)
+    ) {
+        Column {
+            Text(
+                text = resource.resourceName,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                fontWeight = FontWeight.Medium
+            )
+            Spacer(modifier = Modifier.height(spacing.extraSmall))
+            Text(
+                text = resource.link,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.clickable {
+                    try {
+                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(resource.link))
+                        context.startActivity(intent)
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "Could not open link", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            )
+        }
+    }
+}
+
 private fun formatTimestamp(timestamp: Long): String {
     val now = System.currentTimeMillis()
     val diff = now - timestamp
-    
+
     return when {
         diff < 60000 -> "Just now" // Less than 1 minute
         diff < 3600000 -> "${diff / 60000}m ago" // Less than 1 hour

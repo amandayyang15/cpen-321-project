@@ -1,7 +1,10 @@
 import { Router } from 'express';
 import { ProjectController } from '../features/projects/project.controller';
 import { validateBody } from '../middleware/validation.middleware';
+import { taskController } from '../features/tasks/task.controller';
+import { authenticateToken } from '../middleware/auth.middleware';
 import { z } from 'zod';
+import expenseRoutes from './expense.routes';
 
 const router = Router();
 const projectController = new ProjectController();
@@ -25,6 +28,27 @@ const addResourceSchema = z.object({
   resourceName: z.string().min(1, 'Resource name is required').max(200, 'Resource name must be less than 200 characters'),
   link: z.string().min(1, 'Resource link is required').max(500, 'Resource link must be less than 500 characters')
 });
+
+const createTaskSchema = z.object({
+  name: z.string().min(1, 'Task name is required'),
+  assignee: z.string().min(1, 'Assignee username is required'),
+  status: z.string().min(1, 'Status is required'),
+  deadline: z.string().optional()
+});
+
+// Task routes
+router.post(
+  '/:projectId/tasks',
+  authenticateToken,
+  validateBody(createTaskSchema),
+  (req, res) => taskController.createTask(req, res)
+);
+
+router.get(
+  '/:projectId/tasks',
+  authenticateToken,
+  (req, res) => taskController.getTasksByProject(req, res)
+);
 
 // Routes
 router.post('/', validateBody(createProjectSchema), projectController.createProject);
