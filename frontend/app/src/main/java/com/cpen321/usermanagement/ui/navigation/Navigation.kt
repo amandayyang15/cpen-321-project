@@ -17,7 +17,6 @@ import com.cpen321.usermanagement.data.repository.ExpenseRepositoryImpl
 import com.cpen321.usermanagement.ui.screens.AuthScreen
 import com.cpen321.usermanagement.ui.screens.LoadingScreen
 import com.cpen321.usermanagement.ui.screens.MainScreen
-import com.cpen321.usermanagement.ui.screens.ManageHobbiesScreen
 import com.cpen321.usermanagement.ui.screens.ManageProfileScreen
 import com.cpen321.usermanagement.ui.screens.ProfileScreenActions
 import com.cpen321.usermanagement.ui.screens.ProfileCompletionScreen
@@ -44,7 +43,6 @@ object NavRoutes {
     const val MAIN = "main"
     const val PROFILE = "profile"
     const val MANAGE_PROFILE = "manage_profile"
-    const val MANAGE_HOBBIES = "manage_hobbies"
     const val PROFILE_COMPLETION = "profile_completion"
     const val PROJECT_VIEW = "project_view"
 }
@@ -139,10 +137,6 @@ private fun handleNavigationEvent(
             navigationStateManager.clearNavigationEvent()
         }
 
-        is NavigationEvent.NavigateToManageHobbies -> {
-            navController.navigate(NavRoutes.MANAGE_HOBBIES)
-            navigationStateManager.clearNavigationEvent()
-        }
 
         is NavigationEvent.NavigateToProjectView -> {
             navController.navigate(NavRoutes.PROJECT_VIEW)
@@ -220,7 +214,6 @@ private fun AppNavHost(
                 actions = ProfileScreenActions(
                     onBackClick = { navigationStateManager.navigateBack() },
                     onManageProfileClick = { navigationStateManager.navigateToManageProfile() },
-                    onManageHobbiesClick = { navigationStateManager.navigateToManageHobbies() },
                     onSignOutClick = { navigationStateManager.navigateToAuthWithMessage("Signed Out")},
                     onAccountDeleted = { navigationStateManager.handleAccountDeletion() }
                 ),
@@ -235,12 +228,6 @@ private fun AppNavHost(
             )
         }
 
-        composable(NavRoutes.MANAGE_HOBBIES) {
-            ManageHobbiesScreen(
-                profileViewModel = profileViewModel,
-                onBackClick = { navigationStateManager.navigateBack() }
-            )
-        }
 
         composable(NavRoutes.PROJECT_VIEW) {
             ProjectView(

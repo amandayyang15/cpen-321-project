@@ -60,6 +60,7 @@ export class ProjectController {
         members: [{
           userId,
           role: 'owner' as const,
+          admin: true,
           joinedAt: new Date()
         }]
       };
@@ -119,20 +120,29 @@ export class ProjectController {
 
       logger.info(`Retrieved ${allProjects.length} projects for user: ${userId}`);
 
+      // Get admin status for each project
+      const projectsWithAdminStatus = await Promise.all(
+        allProjects.map(async (project) => {
+          const isAdmin = await projectModel.isUserAdmin(project._id, new mongoose.Types.ObjectId(userId));
+          return {
+            id: project._id,
+            name: project.name,
+            description: project.description,
+            invitationCode: project.invitationCode,
+            ownerId: project.ownerId.toString(), // Convert to string
+            members: project.members,
+            resources: project.resources || [], // Include resources
+            createdAt: project.createdAt,
+            updatedAt: project.updatedAt,
+            isOwner: project.ownerId.toString() === userId,
+            isAdmin
+          };
+        })
+      );
+
       res.status(200).json({
         message: 'Projects retrieved successfully',
-        data: allProjects.map(project => ({
-          id: project._id,
-          name: project.name,
-          description: project.description,
-          invitationCode: project.invitationCode,
-          ownerId: project.ownerId.toString(), // Convert to string
-          members: project.members,
-          resources: project.resources || [], // Include resources
-          createdAt: project.createdAt,
-          updatedAt: project.updatedAt,
-          isOwner: project.ownerId.toString() === userId
-        }))
+        data: projectsWithAdminStatus
       });
     } catch (error) {
       logger.error('Error retrieving user projects:', error);
@@ -160,6 +170,7 @@ export class ProjectController {
       // Check if user has access to this project
       const isOwner = project.ownerId.toString() === userId;
       const isMember = project.members.some(member => member.userId.toString() === userId);
+      const isAdmin = await projectModel.isUserAdmin(new mongoose.Types.ObjectId(projectId), new mongoose.Types.ObjectId(userId));
 
       if (!isOwner && !isMember) {
         res.status(403).json({ message: 'Access denied to this project' });
@@ -183,7 +194,8 @@ export class ProjectController {
           resources: project.resources || [],
           createdAt: project.createdAt,
           updatedAt: project.updatedAt,
-          isOwner
+          isOwner,
+          isAdmin
         }
       });
     } catch (error) {
@@ -210,9 +222,12 @@ export class ProjectController {
         return;
       }
 
-      // Check if user is the owner
-      if (project.ownerId.toString() !== userId) {
-        res.status(403).json({ message: 'Only project owner can update project' });
+      // Check if user is the owner or admin
+      const isOwner = project.ownerId.toString() === userId;
+      const isAdmin = await projectModel.isUserAdmin(new mongoose.Types.ObjectId(projectId), new mongoose.Types.ObjectId(userId));
+      
+      if (!isOwner && !isAdmin) {
+        res.status(403).json({ message: 'Only project owner or admin can update project' });
         return;
       }
 
@@ -248,7 +263,9 @@ export class ProjectController {
           members: updatedProject.members,
           resources: updatedProject.resources || [], // Include resources
           createdAt: updatedProject.createdAt,
-          updatedAt: updatedProject.updatedAt
+          updatedAt: updatedProject.updatedAt,
+          isOwner,
+          isAdmin
         }
       });
     } catch (error) {
@@ -261,6 +278,8 @@ export class ProjectController {
     try {
       const { projectId } = req.params;
       const userId = req.user?.id;
+
+      logger.info(`Delete project request: projectId=${projectId}, userId=${userId}`);
 
       if (!userId) {
         res.status(401).json({ message: 'User not authenticated' });
@@ -282,10 +301,10 @@ export class ProjectController {
 
       await projectModel.delete(new mongoose.Types.ObjectId(projectId));
 
-      // Remove from user's owned projects
+      // Remove from user's owned projects (cleanup)
       await userModel.removeOwnedProject(new mongoose.Types.ObjectId(userId), new mongoose.Types.ObjectId(projectId));
 
-      logger.info(`Project deleted: ${projectId} by user: ${userId}`);
+      logger.info(`Project permanently deleted from database: ${projectId} by user: ${userId}`);
 
       res.status(200).json({
         message: 'Project deleted successfully'
@@ -334,6 +353,7 @@ export class ProjectController {
       const memberData = {
         userId: new mongoose.Types.ObjectId(userId),
         role: 'user' as const,
+        admin: false,
         joinedAt: new Date()
       };
 
@@ -444,6 +464,86 @@ export class ProjectController {
       });
     } catch (error) {
       logger.error('Error adding resource:', error);
+      res.status(500).json({ message: 'Internal server error' });
+    }
+  }
+
+  async removeMember(req: Request, res: Response): Promise<void> {
+    try {
+      const { projectId, userId: memberId } = req.params;
+      const userId = req.user?.id;
+
+      logger.info(`Remove member request: projectId=${projectId}, memberId=${memberId}, adminId=${userId}`);
+
+      if (!userId) {
+        res.status(401).json({ message: 'User not authenticated' });
+        return;
+      }
+
+      const project = await projectModel.findById(new mongoose.Types.ObjectId(projectId));
+
+      if (!project) {
+        res.status(404).json({ message: 'Project not found' });
+        return;
+      }
+
+      // Check if user is admin or owner
+      const isOwner = project.ownerId.toString() === userId;
+      const isAdmin = await projectModel.isUserAdmin(new mongoose.Types.ObjectId(projectId), new mongoose.Types.ObjectId(userId));
+
+      if (!isOwner && !isAdmin) {
+        res.status(403).json({ message: 'Only project owner or admin can remove members' });
+        return;
+      }
+
+      // Check if trying to remove the owner
+      if (project.ownerId.toString() === memberId) {
+        res.status(400).json({ message: 'Cannot remove project owner' });
+        return;
+      }
+
+      // Check if member exists in project
+      const memberExists = project.members.some(member => member.userId.toString() === memberId);
+      if (!memberExists) {
+        res.status(404).json({ message: 'Member not found in project' });
+        return;
+      }
+
+      // Remove member from project
+      const updatedProject = await projectModel.removeMember(new mongoose.Types.ObjectId(projectId), new mongoose.Types.ObjectId(memberId));
+
+      if (!updatedProject) {
+        res.status(500).json({ message: 'Failed to remove member' });
+        return;
+      }
+
+      // Remove project from user's member projects
+      await userModel.removeMemberProject(new mongoose.Types.ObjectId(memberId), new mongoose.Types.ObjectId(projectId));
+
+      // Calculate admin and owner status for the response
+      const userIsOwner = updatedProject.ownerId.toString() === userId;
+      const userIsAdmin = await projectModel.isUserAdmin(new mongoose.Types.ObjectId(projectId), new mongoose.Types.ObjectId(userId));
+
+      logger.info(`Member removed from project: ${projectId}, memberId: ${memberId} by admin: ${userId}`);
+
+      res.status(200).json({
+        message: 'Member removed successfully',
+        data: {
+          id: updatedProject._id,
+          name: updatedProject.name,
+          description: updatedProject.description,
+          invitationCode: updatedProject.invitationCode,
+          ownerId: updatedProject.ownerId.toString(),
+          members: updatedProject.members,
+          resources: updatedProject.resources || [],
+          createdAt: updatedProject.createdAt,
+          updatedAt: updatedProject.updatedAt,
+          isOwner: userIsOwner,
+          isAdmin: userIsAdmin
+        }
+      });
+    } catch (error) {
+      logger.error('Error removing member:', error);
       res.status(500).json({ message: 'Internal server error' });
     }
   }

@@ -13,6 +13,7 @@ interface ProjectRepository {
     suspend fun getProjectById(projectId: String): Result<Project>
     suspend fun updateProject(projectId: String, name: String? = null, description: String? = null): Result<Project>
     suspend fun deleteProject(projectId: String): Result<Unit>
+    suspend fun removeMember(projectId: String, userId: String): Result<Project>
     suspend fun addResource(projectId: String, resourceName: String, link: String): Result<Project>
     suspend fun sendMessage(projectId: String, content: String): Result<ChatMessage>
     suspend fun getMessages(projectId: String): Result<List<ChatMessage>>

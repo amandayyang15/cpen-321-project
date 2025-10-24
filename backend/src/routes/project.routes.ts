@@ -51,12 +51,13 @@ router.get(
 );
 
 // Routes
-router.post('/', validateBody(createProjectSchema), projectController.createProject);
-router.post('/join', validateBody(joinProjectSchema), projectController.joinProject);
-router.get('/', projectController.getUserProjects);
-router.get('/:projectId', projectController.getProjectById);
-router.put('/:projectId', validateBody(updateProjectSchema), projectController.updateProject);
-router.delete('/:projectId', projectController.deleteProject);
-router.post('/:projectId/resources', validateBody(addResourceSchema), projectController.addResource);
+router.post('/', authenticateToken, validateBody(createProjectSchema), projectController.createProject);
+router.post('/join', authenticateToken, validateBody(joinProjectSchema), projectController.joinProject);
+router.get('/', authenticateToken, projectController.getUserProjects);
+router.get('/:projectId', authenticateToken, projectController.getProjectById);
+router.put('/:projectId', authenticateToken, validateBody(updateProjectSchema), projectController.updateProject);
+router.delete('/:projectId', authenticateToken, projectController.deleteProject);
+router.delete('/:projectId/members/:userId', authenticateToken, projectController.removeMember);
+router.post('/:projectId/resources', authenticateToken, validateBody(addResourceSchema), projectController.addResource);
 
 export default router;

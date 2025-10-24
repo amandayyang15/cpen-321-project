@@ -5,6 +5,7 @@ import java.util.Date
 data class ProjectMember(
     val userId: String,
     val role: String, // "owner" or "user"
+    val admin: Boolean,
     val joinedAt: String
 )
 
@@ -23,7 +24,8 @@ data class Project(
     val resources: List<Resource> = emptyList(),
     val createdAt: String,
     val updatedAt: String,
-    val isOwner: Boolean? = null
+    val isOwner: Boolean? = null,
+    val isAdmin: Boolean? = null
 )
 
 data class CreateProjectRequest(

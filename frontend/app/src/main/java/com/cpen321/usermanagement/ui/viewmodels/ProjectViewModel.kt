@@ -405,6 +405,7 @@ class ProjectViewModel @Inject constructor(
     }
 
     fun deleteProject(projectId: String) {
+        Log.d(TAG, "deleteProject called with projectId: $projectId")
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isDeleting = true, errorMessage = null)
 
@@ -424,6 +425,34 @@ class ProjectViewModel @Inject constructor(
                     _uiState.value = _uiState.value.copy(
                         isDeleting = false,
                         errorMessage = error.message ?: "Failed to delete project"
+                    )
+                }
+        }
+    }
+
+    fun removeMember(projectId: String, userId: String) {
+        Log.d(TAG, "removeMember called with projectId: $projectId, userId: $userId")
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isDeleting = true, errorMessage = null)
+
+            projectRepository.removeMember(projectId, userId)
+                .onSuccess { updatedProject ->
+                    Log.d(TAG, "Member removed from project: $projectId")
+                    val updatedProjects = _uiState.value.projects.map { project ->
+                        if (project.id == projectId) updatedProject else project
+                    }
+                    _uiState.value = _uiState.value.copy(
+                        isDeleting = false,
+                        projects = updatedProjects,
+                        selectedProject = if (_uiState.value.selectedProject?.id == projectId) updatedProject else _uiState.value.selectedProject,
+                        message = "Member removed successfully"
+                    )
+                }
+                .onFailure { error ->
+                    Log.e(TAG, "Failed to remove member", error)
+                    _uiState.value = _uiState.value.copy(
+                        isDeleting = false,
+                        errorMessage = error.message ?: "Failed to remove member"
                     )
                 }
         }

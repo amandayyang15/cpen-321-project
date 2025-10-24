@@ -181,8 +181,10 @@ class ProjectRepositoryImpl @Inject constructor(
     }
 
     override suspend fun deleteProject(projectId: String): Result<Unit> {
+        Log.d(TAG, "deleteProject called in repository with projectId: $projectId")
         return try {
             val response = projectInterface.deleteProject(projectId)
+            Log.d(TAG, "Delete project response: ${response.code()}, isSuccessful: ${response.isSuccessful}")
             if (response.isSuccessful) {
                 Log.d(TAG, "Project deleted successfully: $projectId")
                 Result.success(Unit)
@@ -210,6 +212,36 @@ class ProjectRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun removeMember(projectId: String, userId: String): Result<Project> {
+        return try {
+            val response = projectInterface.removeMember(projectId, userId)
+            if (response.isSuccessful && response.body()?.data != null) {
+                val project = response.body()!!.data!!
+                Log.d(TAG, "Member removed successfully from project: ${project.id}")
+                Result.success(project)
+            } else {
+                val errorBodyString = response.errorBody()?.string()
+                val errorMessage = JsonUtils.parseErrorMessage(
+                    errorBodyString,
+                    response.body()?.message ?: "Failed to remove member."
+                )
+                Log.e(TAG, "Remove member failed: $errorMessage")
+                Result.failure(Exception(errorMessage))
+            }
+        } catch (e: java.net.SocketTimeoutException) {
+            Log.e(TAG, "Network timeout during remove member", e)
+            Result.failure(e)
+        } catch (e: java.net.UnknownHostException) {
+            Log.e(TAG, "Network connection failed during remove member", e)
+            Result.failure(e)
+        } catch (e: java.io.IOException) {
+            Log.e(TAG, "IO error during remove member", e)
+            Result.failure(e)
+        } catch (e: retrofit2.HttpException) {
+            Log.e(TAG, "HTTP error during remove member: ${e.code()}", e)
+            Result.failure(e)
+        }
+    }
 
     override suspend fun addResource(projectId: String, resourceName: String, link: String): Result<Project> {
         val addResourceReq = AddResourceRequest(resourceName, link)
