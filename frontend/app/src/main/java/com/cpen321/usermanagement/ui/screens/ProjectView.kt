@@ -4,6 +4,7 @@ import Icon
 import androidx.compose.runtime.collectAsState
 import com.cpen321.usermanagement.data.remote.dto.Task
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -25,8 +26,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
@@ -56,6 +61,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.setValue
 import android.util.Log
 import androidx.compose.ui.Alignment
@@ -74,6 +80,7 @@ import com.cpen321.usermanagement.data.remote.dto.ProjectMember
 
 import com.cpen321.usermanagement.ui.theme.LocalSpacing
 import com.cpen321.usermanagement.ui.viewmodels.ProjectViewModel
+import com.cpen321.usermanagement.ui.viewmodels.ProfileViewModel
 import android.widget.Toast
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
@@ -107,6 +114,7 @@ data class ChatMessage(
     val projectId: String,
     val isFromCurrentUser: Boolean = false
 )
+
 
 @Composable
 fun ProjectView(
@@ -156,7 +164,8 @@ private fun ProjectContent(
             paddingValues = paddingValues,
             projectViewModel = projectViewModel,
             profileViewModel = profileViewModel,
-            expenseRepository = expenseRepository
+            expenseRepository = expenseRepository,
+            navigationStateManager = navigationStateManager
         )
     }
 }
@@ -249,6 +258,7 @@ private fun ProjectBody(
     projectViewModel: ProjectViewModel,
     profileViewModel: com.cpen321.usermanagement.ui.viewmodels.ProfileViewModel,
     expenseRepository: com.cpen321.usermanagement.data.repository.ExpenseRepository,
+    navigationStateManager: NavigationStateManager,
     modifier: Modifier = Modifier
 ) {
     val spacing = LocalSpacing.current
@@ -257,12 +267,70 @@ private fun ProjectBody(
     val profileUiState by profileViewModel.uiState.collectAsState()
     val currentProject = uiState.selectedProject
     val currentUser = profileUiState.user
+    val coroutineScope = rememberCoroutineScope()
     
-    // Debug project changes
-    LaunchedEffect(currentProject) {
-        Log.d("ProjectView", "Current project changed to: ${currentProject?.id} (${currentProject?.name})")
+        // Project Settings state
+        var projectName by remember { mutableStateOf(currentProject?.name ?: "") }
+        var selectedUserToRemove by remember { mutableStateOf("") }
+        var removeUserExpanded by remember { mutableStateOf(false) }
+        var showDeleteConfirmationDialog by remember { mutableStateOf(false) }
+        var refreshMembersTrigger by remember { mutableStateOf(0) }
+        var userNames by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+        var isLoadingUserNames by remember { mutableStateOf(false) }
+    
+        // Debug project changes and update project name field
+        LaunchedEffect(currentProject) {
+            Log.d("ProjectView", "Current project changed to: ${currentProject?.id} (${currentProject?.name})")
+            projectName = currentProject?.name ?: ""
+            // Force member list recalculation when project changes
+            refreshMembersTrigger++
+            
+            // Load user names for all members
+            currentProject?.members?.let { members ->
+                val userIds = members.map { it.userId }
+                // Use coroutine scope to fetch user names
+                coroutineScope.launch {
+                    isLoadingUserNames = true
+                    val names = mutableMapOf<String, String>()
+                    userIds.forEach { userId ->
+                        try {
+                            val result = profileViewModel.getUserById(userId)
+                            if (result.isSuccess) {
+                                val user = result.getOrNull()
+                                names[userId] = user?.name ?: "Unknown User"
+                            } else {
+                                names[userId] = "Unknown User"
+                            }
+                        } catch (e: Exception) {
+                            names[userId] = "Unknown User"
+                        }
+                    }
+                    userNames = names
+                    isLoadingUserNames = false
+                }
+            }
+        }
+
+    // Handle project update success/error messages
+    LaunchedEffect(uiState.message, uiState.errorMessage) {
+        uiState.message?.let { message ->
+            if (message.contains("updated successfully")) {
+                Toast.makeText(context, "Project renamed successfully", Toast.LENGTH_SHORT).show()
+            } else if (message.contains("removed successfully")) {
+                Toast.makeText(context, "Member removed successfully", Toast.LENGTH_SHORT).show()
+                // Clear the selection and close dropdown when member is removed
+                selectedUserToRemove = ""
+                removeUserExpanded = false
+            }
+        }
+        uiState.errorMessage?.let { errorMessage ->
+            if (errorMessage.contains("update")) {
+                Toast.makeText(context, "Failed to rename project: $errorMessage", Toast.LENGTH_SHORT).show()
+            } else if (errorMessage.contains("remove")) {
+                Toast.makeText(context, "Failed to remove member: $errorMessage", Toast.LENGTH_SHORT).show()
+            }
+        }
     }
-    val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
 
 
     var progressExpanded by remember { mutableStateOf(false) }
@@ -282,10 +350,7 @@ private fun ProjectBody(
     var resourceName by remember { mutableStateOf("") }
     var resourceLink by remember { mutableStateOf("") }
 
-    // Project Settings state
-    var projectName by remember { mutableStateOf("") }
-    var selectedUserToRemove by remember { mutableStateOf("") }
-    var removeUserExpanded by remember { mutableStateOf(false) }
+    // Project Settings state (variables moved to top)
 
     // Expense state
     var expenses by remember { mutableStateOf(listOf<Expense>()) }
@@ -296,16 +361,18 @@ private fun ProjectBody(
     var paidByExpanded by remember { mutableStateOf(false) }
     var selectedUsersForSplit by remember { mutableStateOf(setOf<String>()) }
 
-    // Get actual project members
-    val projectMembers = currentProject?.members ?: emptyList()
-    val ownerMember = currentProject?.let {
-        ProjectMember(userId = it.ownerId, role = "owner", joinedAt = it.createdAt)
-    }
-    // Only add owner if they're not already in projectMembers (avoid duplicates)
-    val allMembers = if (ownerMember != null && !projectMembers.any { it.userId == ownerMember.userId }) {
-        listOf(ownerMember) + projectMembers
-    } else {
-        projectMembers
+    // Get actual project members - recalculate when currentProject changes or refresh is triggered
+    val allMembers = remember(currentProject, refreshMembersTrigger) {
+        val projectMembers = currentProject?.members ?: emptyList()
+        val ownerMember = currentProject?.let {
+            ProjectMember(userId = it.ownerId, role = "owner", admin = true, joinedAt = it.createdAt)
+        }
+        // Only add owner if they're not already in projectMembers (avoid duplicates)
+        if (ownerMember != null && !projectMembers.any { it.userId == ownerMember.userId }) {
+            listOf(ownerMember) + projectMembers
+        } else {
+            projectMembers
+        }
     }
 
     // Chat state - now using backend messages from ViewModel
@@ -319,10 +386,6 @@ private fun ProjectBody(
         }
     }
 
-    // Debug user loading
-    LaunchedEffect(currentUser) {
-        Log.d("ProjectView", "Current user changed: ${currentUser?._id}, name: ${currentUser?.name}")
-    }
 
     // Re-map messages when user profile is loaded to ensure proper alignment
     val mappedMessages = remember(backendMessages, currentUser) {
@@ -446,14 +509,17 @@ private fun ProjectBody(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(spacing.small)
         ) {
-            Button(
-                onClick = {
-                    Log.d("ProjectView", "Clicked Project Settings")
-                    selectedTab = "Project Settings"
-                },
-                modifier = Modifier.weight(1f)
-            ) {
-                Text("Project Settings")
+            // Only show Project Settings button if user is admin
+            if (currentProject?.isAdmin == true) {
+                Button(
+                    onClick = {
+                        Log.d("ProjectView", "Clicked Project Settings")
+                        selectedTab = "Project Settings"
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Project Settings")
+                }
             }
 
             Button(
@@ -648,7 +714,29 @@ private fun ProjectBody(
                                         text = "Assignees: ",
                                         fontWeight = FontWeight.Bold
                                     )
-                                    Text(text = task.assignees.joinToString())
+                                    if (isLoadingUserNames) {
+                                        Row {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(12.dp),
+                                                strokeWidth = 2.dp
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(
+                                                text = "Loading...",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                            )
+                                        }
+                                    } else {
+                                        Text(text = task.assignees.joinToString { assigneeId ->
+                                            val userName = userNames[assigneeId] ?: assigneeId
+                                            if (assigneeId == currentUser?._id) {
+                                                "$userName (Me)"
+                                            } else {
+                                                userName
+                                            }
+                                        })
+                                    }
                                 }
                                 Row {
                                     Text(
@@ -683,6 +771,17 @@ private fun ProjectBody(
         ) {
             when (selectedTab) {
                 "Project Settings" -> {
+                    // Refresh project data when Project Settings tab is opened
+                    LaunchedEffect(selectedTab) {
+                        if (selectedTab == "Project Settings") {
+                            // Force refresh profile to ensure correct user context
+                            profileViewModel.loadProfile()
+                            projectViewModel.refreshSelectedProject()
+                            // Force member list recalculation
+                            refreshMembersTrigger++
+                        }
+                    }
+                    
                     Text(
                         text = "Project Settings:",
                         style = MaterialTheme.typography.titleMedium,
@@ -719,7 +818,7 @@ private fun ProjectBody(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 Text(
-                                    text = "(CODE)",
+                                    text = currentProject?.invitationCode ?: "",
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                                 )
@@ -748,7 +847,10 @@ private fun ProjectBody(
                                     color = MaterialTheme.colorScheme.onErrorContainer
                                 )
                                 Button(
-                                    onClick = { Log.d("ProjectView", "Delete Project clicked") },
+                                    onClick = { 
+                                        Log.d("ProjectView", "Delete Project clicked")
+                                        showDeleteConfirmationDialog = true
+                                    },
                                     colors = androidx.compose.material3.ButtonDefaults.buttonColors(
                                         containerColor = MaterialTheme.colorScheme.error
                                     )
@@ -792,8 +894,13 @@ private fun ProjectBody(
                                     )
                                     Button(
                                         onClick = {
-                                            Log.d("ProjectView", "Rename project to: $projectName")
-                                            Toast.makeText(context, "Project renamed to: $projectName", Toast.LENGTH_SHORT).show()
+                                            if (projectName.isNotBlank() && currentProject != null) {
+                                                Log.d("ProjectView", "Renaming project to: $projectName")
+                                                projectViewModel.updateProject(currentProject.id, projectName.trim())
+                                                // Success/error messages will be handled by the ViewModel state
+                                            } else {
+                                                Toast.makeText(context, "Please enter a valid project name", Toast.LENGTH_SHORT).show()
+                                            }
                                         }
                                     ) {
                                         Text("Save")
@@ -802,64 +909,116 @@ private fun ProjectBody(
                             }
                         }
 
-                        // Remove Users card
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(
-                                    color = MaterialTheme.colorScheme.secondaryContainer,
-                                    shape = RoundedCornerShape(8.dp)
-                                )
-                                .padding(spacing.medium)
-                        ) {
-                            Column(
-                                verticalArrangement = Arrangement.spacedBy(spacing.medium)
+                        // Remove Users card - only show to admins
+                        if (currentProject?.isAdmin == true) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(
+                                        color = MaterialTheme.colorScheme.secondaryContainer,
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                                    .padding(spacing.medium)
                             ) {
-                                Text(
-                                    text = "Remove Users",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    fontWeight = FontWeight.Medium,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer
-                                )
+                                Column(
+                                    verticalArrangement = Arrangement.spacedBy(spacing.medium)
+                                ) {
+                                    Text(
+                                        text = "Remove Users",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                                    )
                                 Row(
                                     horizontalArrangement = Arrangement.spacedBy(spacing.small)
                                 ) {
                                     Box(modifier = Modifier.weight(1f)) {
-                                        TextButton(
-                                            onClick = { removeUserExpanded = !removeUserExpanded },
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            Text(
-                                                text = selectedUserToRemove.ifEmpty { "Select user" },
-                                                modifier = Modifier.fillMaxWidth(),
-                                                textAlign = TextAlign.Start
+                                        OutlinedButton(
+                                            onClick = { 
+                                                // Refresh project data before opening dropdown
+                                                projectViewModel.refreshSelectedProject()
+                                                // Force member list recalculation
+                                                refreshMembersTrigger++
+                                                removeUserExpanded = !removeUserExpanded 
+                                            },
+                                            modifier = Modifier.fillMaxWidth(),
+                                            colors = ButtonDefaults.outlinedButtonColors(
+                                                contentColor = MaterialTheme.colorScheme.onSurface
+                                            ),
+                                            border = BorderStroke(
+                                                1.dp, 
+                                                MaterialTheme.colorScheme.outline
                                             )
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    text = if (selectedUserToRemove.isNotEmpty()) {
+                                                        userNames[selectedUserToRemove] ?: selectedUserToRemove
+                                                    } else {
+                                                        "Select user"
+                                                    },
+                                                    textAlign = TextAlign.Start,
+                                                    style = MaterialTheme.typography.bodyMedium
+                                                )
+                                                Icon(
+                                                    imageVector = if (removeUserExpanded) 
+                                                        Icons.Filled.KeyboardArrowUp 
+                                                    else 
+                                                        Icons.Filled.KeyboardArrowDown,
+                                                    contentDescription = if (removeUserExpanded) "Close dropdown" else "Open dropdown",
+                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
                                         }
                                         DropdownMenu(
                                             expanded = removeUserExpanded,
                                             onDismissRequest = { removeUserExpanded = false }
                                         ) {
-                                            listOf("Justin", "Alice", "Bob", "Charlie").forEach { user ->
+                                            // Filter out the current user and owner from the list
+                                            val removableMembers = allMembers.filter { member ->
+                                                member.userId != currentUser?._id && 
+                                                member.userId != currentProject?.ownerId
+                                            }
+                                            
+                                            if (removableMembers.isEmpty()) {
                                                 DropdownMenuItem(
-                                                    text = { Text(user) },
-                                                    onClick = {
-                                                        selectedUserToRemove = user
-                                                        removeUserExpanded = false
-                                                    }
+                                                    text = { Text("No members to remove") },
+                                                    onClick = { removeUserExpanded = false }
                                                 )
+                                            } else {
+                                                removableMembers.forEach { member ->
+                                                    DropdownMenuItem(
+                                                        text = { 
+                                                            Text(userNames[member.userId] ?: member.userId)
+                                                        },
+                                                        onClick = {
+                                                            selectedUserToRemove = member.userId
+                                                            removeUserExpanded = false
+                                                        }
+                                                    )
+                                                }
                                             }
                                         }
                                     }
                                     Button(
                                         onClick = {
-                                            Log.d("ProjectView", "Remove user: $selectedUserToRemove")
-                                            Toast.makeText(context, "Removed user: $selectedUserToRemove", Toast.LENGTH_SHORT).show()
+                                            if (selectedUserToRemove.isNotBlank() && currentProject != null) {
+                                                projectViewModel.removeMember(currentProject.id, selectedUserToRemove)
+                                                selectedUserToRemove = ""
+                                            } else {
+                                                Toast.makeText(context, "Please select a user to remove", Toast.LENGTH_SHORT).show()
+                                            }
                                         }
                                     ) {
                                         Text("Remove")
                                     }
                                 }
                             }
+                        }
                         }
                     }
                 }
@@ -1138,7 +1297,18 @@ private fun ProjectBody(
                         )
                         Box {
                             OutlinedTextField(
-                                value = assignee,
+                                value = if (isLoadingUserNames && assignee.isNotEmpty()) {
+                                    "Loading..."
+                                } else if (assignee.isNotEmpty()) {
+                                    val userName = userNames[assignee] ?: assignee
+                                    if (assignee == currentUser?._id) {
+                                        "$userName (Me)"
+                                    } else {
+                                        userName
+                                    }
+                                } else {
+                                    ""
+                                },
                                 onValueChange = { },
                                 readOnly = true,
                                 label = { Text("Select Assignee") },
@@ -1161,26 +1331,43 @@ private fun ProjectBody(
                                 expanded = assigneeExpanded,
                                 onDismissRequest = { assigneeExpanded = false }
                             ) {
-                                allMembers.forEach { member ->
+                                if (isLoadingUserNames) {
                                     DropdownMenuItem(
                                         text = {
-                                            Column {
-                                                Text(
-                                                    text = member.userId,
-                                                    style = MaterialTheme.typography.bodyMedium
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                CircularProgressIndicator(
+                                                    modifier = Modifier.size(16.dp),
+                                                    strokeWidth = 2.dp
                                                 )
-                                                Text(
-                                                    text = member.role.replaceFirstChar { it.uppercase() },
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text("Loading members...")
                                             }
                                         },
-                                        onClick = {
-                                            assignee = member.userId
-                                            assigneeExpanded = false
-                                        }
+                                        onClick = { }
                                     )
+                                } else {
+                                    allMembers.forEach { member ->
+                                        DropdownMenuItem(
+                                            text = {
+                                                val userName = userNames[member.userId] ?: member.userId
+                                                val displayName = if (member.userId == currentUser?._id) {
+                                                    "$userName (Me)"
+                                                } else {
+                                                    userName
+                                                }
+                                                Text(
+                                                    text = displayName,
+                                                    style = MaterialTheme.typography.bodyMedium
+                                                )
+                                            },
+                                            onClick = {
+                                                assignee = member.userId
+                                                assigneeExpanded = false
+                                            }
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -1538,6 +1725,45 @@ private fun ProjectBody(
                 onResourceLinkChange = { resourceLink = it },
                 isAdding = uiState.isCreating,
                 errorMessage = uiState.errorMessage
+            )
+        }
+
+        // Delete Project Confirmation Dialog
+        if (showDeleteConfirmationDialog) {
+            AlertDialog(
+                onDismissRequest = { showDeleteConfirmationDialog = false },
+                title = {
+                    Text("Delete Project")
+                },
+                text = {
+                    Text("Are you sure you want to delete this project? This action cannot be undone.")
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            currentProject?.let { project ->
+                                Log.d("ProjectView", "Attempting to delete project: ${project.id}")
+                                projectViewModel.deleteProject(project.id)
+                                showDeleteConfirmationDialog = false
+                                // Navigate back to the home screen
+                                navigationStateManager.navigateBack()
+                                Toast.makeText(context, "Project deleted successfully", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error
+                        )
+                    ) {
+                        Text("Delete")
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = { showDeleteConfirmationDialog = false }
+                    ) {
+                        Text("Cancel")
+                    }
+                }
             )
         }
     }

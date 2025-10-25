@@ -3,7 +3,6 @@ package com.cpen321.usermanagement.data.remote.dto
 data class UpdateProfileRequest(
     val name: String? = null,
     val bio: String? = null,
-    val hobbies: List<String>? = null,
     val profilePicture: String? = null
 )
 
@@ -17,7 +16,6 @@ data class User(
     val name: String,
     val bio: String?,
     val profilePicture: String,
-    val hobbies: List<String> = emptyList(),
     val createdAt: String? = null,
     val updatedAt: String? = null
 )

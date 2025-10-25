@@ -3,6 +3,7 @@ import mongoose, { Schema, Document } from 'mongoose';
 export interface IProjectMember {
   userId: mongoose.Types.ObjectId;
   role: 'owner' | 'user';
+  admin: boolean;
   joinedAt: Date;
 }
 
@@ -33,6 +34,11 @@ const projectMemberSchema = new Schema<IProjectMember>({
   role: {
     type: String,
     enum: ['owner', 'user'],
+    required: true,
+  },
+  admin: {
+    type: Boolean,
+    default: false,
     required: true,
   },
   joinedAt: {
@@ -222,7 +228,9 @@ export class ProjectModel {
 
   async delete(projectId: mongoose.Types.ObjectId): Promise<void> {
     try {
-      await this.project.findByIdAndUpdate(projectId, { isActive: false });
+      console.log(`Deleting project with ID: ${projectId}`);
+      const result = await this.project.findByIdAndDelete(projectId);
+      console.log(`Project deletion result:`, result);
     } catch (error) {
       console.error('Error deleting project:', error);
       throw new Error('Failed to delete project');
@@ -236,6 +244,19 @@ export class ProjectModel {
       result += characters.charAt(Math.floor(Math.random() * characters.length));
     }
     return result;
+  }
+
+  async isUserAdmin(projectId: mongoose.Types.ObjectId, userId: mongoose.Types.ObjectId): Promise<boolean> {
+    try {
+      const project = await this.project.findById(projectId);
+      if (!project) return false;
+      
+      const member = project.members.find(m => m.userId.toString() === userId.toString());
+      return member ? member.admin : false;
+    } catch (error) {
+      console.error('Error checking admin status:', error);
+      return false;
+    }
   }
 }
 

@@ -38,6 +38,12 @@ interface ProjectInterface {
     @DELETE("projects/{projectId}")
     suspend fun deleteProject(@Path("projectId") projectId: String): Response<ApiResponse<Unit>>
 
+    @DELETE("projects/{projectId}/members/{userId}")
+    suspend fun removeMember(
+        @Path("projectId") projectId: String,
+        @Path("userId") userId: String
+    ): Response<ApiResponse<Project>>
+
     @POST("projects/{projectId}/resources")
     suspend fun addResource(
         @Path("projectId") projectId: String,
