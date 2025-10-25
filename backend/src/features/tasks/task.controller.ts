@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import { taskModel } from './task.model';
 import { userModel } from '../users/user.model';
+import { calendarService } from '../calendar/calendar.service';
 import logger from '../../utils/logger.util';
 
 export class TaskController {
@@ -113,6 +114,11 @@ export class TaskController {
         logger.info('✅ Task created with correct project ID');
       }
 
+      // Sync with Google Calendar for all assignees who have calendar enabled
+      if (task.deadline) {
+        await this.syncTaskToCalendars(task);
+      }
+
       res.status(201).json({ success: true, data: task });
     } catch (error) {
       logger.error('❌ Error creating task:', error);
@@ -221,6 +227,11 @@ export class TaskController {
         return;
       }
 
+      // Sync with Google Calendar if deadline changed
+      if (task.deadline && (deadline !== undefined || assignees !== undefined)) {
+        await this.syncTaskToCalendars(task);
+      }
+
       logger.info('✅ Task updated:', task._id.toString());
       res.status(200).json({ success: true, data: task });
     } catch (error) {
@@ -241,6 +252,14 @@ export class TaskController {
       if (!userId) {
         res.status(401).json({ message: 'User not authenticated' });
         return;
+      }
+
+      // Get task before deleting to access calendar event ID
+      const task = await taskModel.findById(new mongoose.Types.ObjectId(taskId));
+      
+      if (task) {
+        // Remove from calendars before deleting
+        await this.removeTaskFromCalendars(task);
       }
 
       await taskModel.delete(new mongoose.Types.ObjectId(taskId));
@@ -300,6 +319,103 @@ export class TaskController {
     } catch (error) {
       logger.error('❌ Error getting all users:', error);
       res.status(500).json({ success: false, message: 'Failed to get all users' });
+    }
+  }
+
+  /**
+   * Helper method: Sync task to Google Calendar for all assignees with calendar enabled
+   */
+  private async syncTaskToCalendars(task: any): Promise<void> {
+    try {
+      logger.info('📅 Syncing task to calendars for assignees:', task.assignees);
+
+      for (const assigneeId of task.assignees) {
+        const assignee = await userModel.findById(assigneeId);
+        
+        if (!assignee) {
+          logger.warn(`Assignee ${assigneeId} not found`);
+          continue;
+        }
+
+        if (!assignee.calendarEnabled || !assignee.calendarRefreshToken) {
+          logger.info(`Calendar not enabled for user ${assignee.name}`);
+          continue;
+        }
+
+        try {
+          // Create or update calendar event
+          if (task.calendarEventId) {
+            // Update existing event
+            await calendarService.updateEvent(
+              assignee.calendarRefreshToken,
+              task.calendarEventId,
+              {
+                summary: task.title,
+                description: task.description || `Task assigned in project`,
+                start: task.deadline,
+                end: task.deadline,
+              }
+            );
+            logger.info(`✅ Calendar event updated for ${assignee.name}`);
+          } else {
+            // Create new event
+            const eventId = await calendarService.createEvent(
+              assignee.calendarRefreshToken,
+              {
+                summary: task.title,
+                description: task.description || `Task assigned in project`,
+                start: task.deadline,
+                end: task.deadline,
+              }
+            );
+            
+            // Store event ID in task
+            await taskModel.update(task._id, { calendarEventId: eventId });
+            logger.info(`✅ Calendar event created for ${assignee.name}: ${eventId}`);
+          }
+        } catch (error) {
+          logger.error(`Failed to sync calendar for user ${assignee.name}:`, error);
+          // Continue with other assignees even if one fails
+        }
+      }
+    } catch (error) {
+      logger.error('Error syncing task to calendars:', error);
+      // Don't throw error - calendar sync is optional
+    }
+  }
+
+  /**
+   * Helper method: Remove task from Google Calendar for all assignees
+   */
+  private async removeTaskFromCalendars(task: any): Promise<void> {
+    try {
+      if (!task.calendarEventId) {
+        return;
+      }
+
+      logger.info('📅 Removing task from calendars for assignees:', task.assignees);
+
+      for (const assigneeId of task.assignees) {
+        const assignee = await userModel.findById(assigneeId);
+        
+        if (!assignee || !assignee.calendarRefreshToken) {
+          continue;
+        }
+
+        try {
+          await calendarService.deleteEvent(
+            assignee.calendarRefreshToken,
+            task.calendarEventId
+          );
+          logger.info(`✅ Calendar event deleted for ${assignee.name}`);
+        } catch (error) {
+          logger.error(`Failed to delete calendar event for user ${assignee.name}:`, error);
+          // Continue with other assignees even if one fails
+        }
+      }
+    } catch (error) {
+      logger.error('Error removing task from calendars:', error);
+      // Don't throw error - calendar sync is optional
     }
   }
 }
