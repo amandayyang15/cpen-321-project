@@ -59,6 +59,9 @@ export class AuthController {
 
       const data = await authService.signInWithGoogle(idToken);
 
+      logger.info('🔑 USER LOGGED IN - JWT TOKEN:', data.token);
+      logger.info('👤 User:', data.user.name, '(', data.user.email, ')');
+
       return res.status(200).json({
         message: 'User signed in successfully',
         data,
