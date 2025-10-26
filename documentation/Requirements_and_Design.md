@@ -4,7 +4,7 @@
 
 | **Change Date**   | **Modified Sections** | **Rationale** |
 | ----------------- | --------------------- | ------------- |
-| _Nothing to show_ |
+| October 26th, 2026 | 4.6 Use Case Sequence Diagram | Added sequence diagrams for 5 use cases|
 
 ---
 
@@ -318,20 +318,16 @@ Users can chat in real time with project teammates, sending and receiving messag
 > Below sections are not required for M1.
 ### **4.6. Use Case Sequence Diagram (5 Most Major Use Cases)**
 
-1. [**User Creates a New Account**](#uc1)
-   *[Sequence diagram to be added]*
-
-2. [**Creating a New Project**](#uc2)
-   *[Sequence diagram to be added]*
-
-3. [**Communicate/Chat With Group Members**](#uc3)
-   *[Sequence diagram to be added]*
-
-4. [**Adding Project Expenses**](#uc4)
-   *[Sequence diagram to be added]*
-
-5. [**Creating/Assigning Project Tasks**](#uc5)
-   *[Sequence diagram to be added]*
+1. [**Create a New Project**]
+![Sequence1 (1)](https://github.com/user-attachments/assets/14733ade-33e2-4758-9cec-aeb69069f5dd)
+2. [**Communicate/Chat With Group Members In An Existing Project**]
+![Sequence2](https://github.com/user-attachments/assets/0eb3ea2f-e07e-4448-ab49-3603b6ff433a)
+3. [**Add Project Expenses**]
+![Sequence3](https://github.com/user-attachments/assets/00f3865e-9bb1-4ff0-84de-d4d35cf07ab1)
+4. [**Create Project Task**]
+![Sequence4](https://github.com/user-attachments/assets/9312309f-ed78-43d1-a533-43d32db42f39)
+5. [**Invite Users To Project**] 
+![Sequence5](https://github.com/user-attachments/assets/e418e536-c311-4879-8bc3-20283612fb91)
 
 ### **4.7. Design and Ways to Test Non-Functional Requirements**
 
