@@ -60,6 +60,7 @@ fun AppNavigation(
     val profileViewModel: ProfileViewModel = hiltViewModel()
     val mainViewModel: MainViewModel = hiltViewModel()
     val projectViewModel: ProjectViewModel = hiltViewModel()
+    val calendarViewModel: com.cpen321.usermanagement.ui.viewmodels.CalendarViewModel = hiltViewModel()
 
     // Handle navigation events from NavigationStateManager
     LaunchedEffect(navigationEvent) {
@@ -78,6 +79,7 @@ fun AppNavigation(
         profileViewModel = profileViewModel,
         mainViewModel = mainViewModel,
         projectViewModel = projectViewModel,
+        calendarViewModel = calendarViewModel,
         navigationStateManager = navigationStateManager
     )
 }
@@ -166,6 +168,7 @@ private fun AppNavHost(
     profileViewModel: ProfileViewModel,
     mainViewModel: MainViewModel,
     projectViewModel: ProjectViewModel,
+    calendarViewModel: com.cpen321.usermanagement.ui.viewmodels.CalendarViewModel,
     navigationStateManager: NavigationStateManager
 ) {
     val context = LocalContext.current
@@ -211,6 +214,7 @@ private fun AppNavHost(
             ProfileScreen(
                 authViewModel = authViewModel,
                 profileViewModel = profileViewModel,
+                calendarViewModel = calendarViewModel,
                 actions = ProfileScreenActions(
                     onBackClick = { navigationStateManager.navigateBack() },
                     onManageProfileClick = { navigationStateManager.navigateToManageProfile() },
