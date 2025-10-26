@@ -72,16 +72,23 @@ export class ChatController {
       logger.info(`Message sent to project: ${projectId} by user: ${userId}`);
       logger.info(`Message ID: ${message._id}, Content: "${message.content}"`);
 
+      const messageResponse = {
+        id: message._id.toString(),
+        content: message.content,
+        senderName: message.senderName,
+        senderId: message.senderId.toString(),
+        timestamp: message.createdAt.getTime(),
+        projectId: message.projectId.toString()
+      };
+
+      // Broadcast new message via WebSocket
+      if (global.chatWebSocketService) {
+        await global.chatWebSocketService.broadcastNewMessage(projectId, messageResponse);
+      }
+
       res.status(201).json({
         message: 'Message sent successfully',
-        data: {
-          id: message._id.toString(),
-          content: message.content,
-          senderName: message.senderName,
-          senderId: message.senderId.toString(),
-          timestamp: message.createdAt.getTime(),
-          projectId: message.projectId.toString()
-        }
+        data: messageResponse
       });
     } catch (error) {
       logger.error('Error sending message:', error);
@@ -185,6 +192,11 @@ export class ChatController {
       await chatMessageModel.delete(new mongoose.Types.ObjectId(messageId));
 
       logger.info(`Message deleted: ${messageId} by user: ${userId}`);
+
+      // Broadcast message deletion via WebSocket
+      if (global.chatWebSocketService) {
+        await global.chatWebSocketService.broadcastMessageDeleted(projectId, messageId);
+      }
 
       res.status(200).json({
         message: 'Message deleted successfully'

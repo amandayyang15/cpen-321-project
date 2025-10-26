@@ -3,6 +3,7 @@ package com.cpen321.usermanagement.di
 import android.content.Context
 import com.cpen321.usermanagement.data.local.preferences.TokenManager
 import com.cpen321.usermanagement.data.remote.api.ProjectInterface
+import com.cpen321.usermanagement.data.remote.websocket.ChatWebSocketService
 import com.cpen321.usermanagement.data.repository.ProjectRepository
 import com.cpen321.usermanagement.data.repository.ProjectRepositoryImpl
 import com.cpen321.usermanagement.data.remote.api.RetrofitClient
@@ -44,5 +45,11 @@ object DataModule {
         projectInterface: ProjectInterface
     ): ProjectRepository {
         return ProjectRepositoryImpl(projectInterface)
+    }
+
+    @Provides
+    @Singleton
+    fun provideChatWebSocketService(): ChatWebSocketService {
+        return ChatWebSocketService()
     }
 }

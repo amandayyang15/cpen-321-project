@@ -53,7 +53,8 @@ data class ChatMessage(
     val senderName: String,
     val senderId: String,
     val timestamp: Long,
-    val projectId: String
+    val projectId: String,
+    val isFromCurrentUser: Boolean = false
 )
 
 data class SendMessageRequest(
