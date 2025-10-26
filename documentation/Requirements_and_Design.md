@@ -303,9 +303,9 @@ Users can chat in real time with project teammates, sending and receiving messag
 
 ### **4.4. Frameworks**
 
-1. **Azure**
+1. **AWS**
     - **Purpose**: To host our server
-    - **Reason**: Credits provided by the course make it easiest cloud provider for us to use
+    - **Reason**: Course tutorial is easy to follow and group members are familiar with AWS
 
 2. **Node.js**
     - **Purpose**: For developing and running our backend server, which will include endpoints for our APIs
