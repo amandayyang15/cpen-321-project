@@ -95,6 +95,9 @@ dependencies {
     // Material Design Components
     implementation(libs.material)
 
+    // Chrome Custom Tabs
+    implementation(libs.androidx.browser)
+
     implementation(libs.kotlinx.coroutines.play.services)
 
     implementation(libs.androidx.credentials)

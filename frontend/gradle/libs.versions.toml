@@ -1,5 +1,6 @@
 [versions]
 agp = "8.12.2"
+browser = "1.8.0"
 coilCompose = "2.7.0"
 converterGson = "3.0.0"
 credentials = "1.5.0"
@@ -28,6 +29,7 @@ runtime = "1.9.3"
 
 [libraries]
 androidx-activity-ktx = { module = "androidx.activity:activity-ktx", version.ref = "activityCompose" }
+androidx-browser = { module = "androidx.browser:browser", version.ref = "browser" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-credentials-play-services-auth = { module = "androidx.credentials:credentials-play-services-auth", version.ref = "credentialsPlayServicesAuth" }
 androidx-credentials = { module = "androidx.credentials:credentials", version.ref = "credentials" }

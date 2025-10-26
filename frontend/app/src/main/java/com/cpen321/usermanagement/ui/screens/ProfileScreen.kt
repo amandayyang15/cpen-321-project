@@ -1,14 +1,22 @@
 package com.cpen321.usermanagement.ui.screens
 
+import android.content.Intent
+import android.net.Uri
+import androidx.browser.customtabs.CustomTabsIntent
 import Button
 import Icon
+import MenuButton
 import MenuButtonItem
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -30,12 +38,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import com.cpen321.usermanagement.R
 import com.cpen321.usermanagement.ui.components.MessageSnackbar
 import com.cpen321.usermanagement.ui.components.MessageSnackbarState
 import com.cpen321.usermanagement.ui.viewmodels.AuthViewModel
+import com.cpen321.usermanagement.ui.viewmodels.CalendarViewModel
 import com.cpen321.usermanagement.ui.viewmodels.ProfileUiState
 import com.cpen321.usermanagement.ui.viewmodels.ProfileViewModel
 import com.cpen321.usermanagement.ui.theme.LocalSpacing
@@ -55,6 +66,7 @@ data class ProfileScreenActions(
 private data class ProfileScreenCallbacks(
     val onBackClick: () -> Unit,
     val onManageProfileClick: () -> Unit,
+    val onConnectCalendarClick: () -> Unit,
     val onDeleteAccountClick: () -> Unit,
     val onDeleteDialogDismiss: () -> Unit,
     val onDeleteDialogConfirm: () -> Unit,
@@ -67,11 +79,14 @@ private data class ProfileScreenCallbacks(
 fun ProfileScreen(
     authViewModel: AuthViewModel,
     profileViewModel: ProfileViewModel,
+    calendarViewModel: CalendarViewModel,
     actions: ProfileScreenActions,
     navigationStateManager: NavigationStateManager
 ) {
     val uiState by profileViewModel.uiState.collectAsState()
+    val calendarUiState by calendarViewModel.uiState.collectAsState()
     val snackBarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
 
     // Dialog state
     var dialogState by remember {
@@ -82,15 +97,31 @@ fun ProfileScreen(
     LaunchedEffect(Unit) {
         profileViewModel.clearSuccessMessage()
         profileViewModel.clearError()
+        calendarViewModel.loadCalendarStatus()
+    }
+
+    // Show calendar success message
+    LaunchedEffect(calendarUiState.successMessage) {
+        calendarUiState.successMessage?.let {
+            snackBarHostState.showSnackbar(it)
+            calendarViewModel.clearSuccessMessage()
+        }
     }
 
     ProfileContent(
         uiState = uiState,
+        calendarConnected = calendarUiState.isConnected,
         dialogState = dialogState,
         snackBarHostState = snackBarHostState,
         callbacks = ProfileScreenCallbacks(
             onBackClick = actions.onBackClick,
             onManageProfileClick = actions.onManageProfileClick,
+            onConnectCalendarClick = {
+                calendarViewModel.getAuthorizationUrl { authUrl ->
+                    val customTabsIntent = CustomTabsIntent.Builder().build()
+                    customTabsIntent.launchUrl(context, Uri.parse(authUrl))
+                }
+            },
             onDeleteAccountClick = {
                 dialogState = dialogState.copy(showDeleteDialog = true)
             },
@@ -115,6 +146,7 @@ fun ProfileScreen(
 @Composable
 private fun ProfileContent(
     uiState: ProfileUiState,
+    calendarConnected: Boolean,
     dialogState: ProfileDialogState,
     snackBarHostState: SnackbarHostState,
     callbacks: ProfileScreenCallbacks,
@@ -140,7 +172,9 @@ private fun ProfileContent(
         ProfileBody(
             paddingValues = paddingValues,
             isLoading = uiState.isLoadingProfile,
+            calendarConnected = calendarConnected,
             onManageProfileClick = callbacks.onManageProfileClick,
+            onConnectCalendarClick = callbacks.onConnectCalendarClick,
             onDeleteAccountClick = callbacks.onDeleteAccountClick,
             onSignOutClick = callbacks.onSignOutClick
         )
@@ -185,7 +219,9 @@ private fun ProfileTopBar(
 private fun ProfileBody(
     paddingValues: PaddingValues,
     isLoading: Boolean,
+    calendarConnected: Boolean,
     onManageProfileClick: () -> Unit,
+    onConnectCalendarClick: () -> Unit,
     onDeleteAccountClick: () -> Unit,
     onSignOutClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -204,7 +240,9 @@ private fun ProfileBody(
 
             else -> {
                 ProfileMenuItems(
+                    calendarConnected = calendarConnected,
                     onManageProfileClick = onManageProfileClick,
+                    onConnectCalendarClick = onConnectCalendarClick,
                     onDeleteAccountClick = onDeleteAccountClick,
                     onSignOutClick = onSignOutClick
                 )
@@ -215,7 +253,9 @@ private fun ProfileBody(
 
 @Composable
 private fun ProfileMenuItems(
+    calendarConnected: Boolean,
     onManageProfileClick: () -> Unit,
+    onConnectCalendarClick: () -> Unit,
     onDeleteAccountClick: () -> Unit,
     onSignOutClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -232,6 +272,11 @@ private fun ProfileMenuItems(
     ) {
         ProfileSection(
             onManageProfileClick = onManageProfileClick
+        )
+
+        CalendarSection(
+            isConnected = calendarConnected,
+            onConnectCalendarClick = onConnectCalendarClick
         )
 
         AccountSection(
@@ -251,6 +296,23 @@ private fun ProfileSection(
         verticalArrangement = Arrangement.spacedBy(LocalSpacing.current.medium)
     ) {
         ManageProfileButton(onClick = onManageProfileClick)
+    }
+}
+
+@Composable
+private fun CalendarSection(
+    isConnected: Boolean,
+    onConnectCalendarClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(LocalSpacing.current.medium)
+    ) {
+        ConnectCalendarButton(
+            isConnected = isConnected,
+            onClick = onConnectCalendarClick
+        )
     }
 }
 
@@ -278,6 +340,49 @@ private fun ManageProfileButton(
         iconRes = R.drawable.ic_manage_profile,
         onClick = onClick,
     )
+}
+
+@Composable
+private fun ConnectCalendarButton(
+    isConnected: Boolean,
+    onClick: () -> Unit,
+) {
+    val spacing = LocalSpacing.current
+    
+    MenuButton(
+        enabled = true,
+        onClick = onClick,
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.Start,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    name = R.drawable.ic_calendar,
+                )
+                Text(
+                    text = stringResource(R.string.connect_google_calendar),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.padding(start = spacing.medium)
+                )
+            }
+            Text(
+                text = if (isConnected) 
+                    stringResource(R.string.calendar_connected) 
+                else 
+                    stringResource(R.string.calendar_not_connected),
+                style = MaterialTheme.typography.bodySmall,
+                color = if (isConnected) Color(0xFF4CAF50) else Color.Gray,
+                fontWeight = FontWeight.Medium
+            )
+        }
+    }
 }
 
 
