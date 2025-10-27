@@ -440,14 +440,21 @@ private fun ProjectBody(
         }
     }
 
-    // Load messages when Chat tab is selected
+    // Load messages when Chat tab is selected and connect to WebSocket
     androidx.compose.runtime.LaunchedEffect(selectedTab, currentProject?.id) {
         if (selectedTab == "Chat" && currentProject != null) {
             try {
                 projectViewModel.loadMessages(currentProject.id)
+                // Connect to WebSocket for real-time updates
+                projectViewModel.connectToChat(currentProject.id)
+                Log.d("ProjectView", "Connected to WebSocket for project ${currentProject.id}")
             } catch (e: Exception) {
                 Log.e("ProjectView", "Error loading messages for project ${currentProject.id}", e)
             }
+        } else if (selectedTab != "Chat" && currentProject != null) {
+            // Disconnect from WebSocket when leaving Chat tab
+            projectViewModel.disconnectFromChat(currentProject.id)
+            Log.d("ProjectView", "Disconnected from WebSocket for project ${currentProject.id}")
         }
     }
 

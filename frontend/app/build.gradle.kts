@@ -103,6 +103,9 @@ dependencies {
     implementation(libs.androidx.credentials)
     implementation(libs.androidx.credentials.play.services.auth)
     implementation(libs.googleid)
+    
+    // Socket.IO for WebSocket
+    implementation(libs.socketio)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

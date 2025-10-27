@@ -7,6 +7,7 @@ import com.cpen321.usermanagement.data.remote.dto.ChatMessage
 import com.cpen321.usermanagement.data.remote.dto.Project
 import com.cpen321.usermanagement.data.repository.ExpenseRepository
 import com.cpen321.usermanagement.data.repository.ProjectRepository
+import com.cpen321.usermanagement.data.remote.websocket.ChatWebSocketService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -15,6 +16,7 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 import com.cpen321.usermanagement.data.remote.dto.Task
 import com.cpen321.usermanagement.data.repository.TaskRepository
+import com.cpen321.usermanagement.data.repository.AuthRepository
 
 
 data class ProjectUiState(
@@ -40,7 +42,9 @@ data class ProjectUiState(
 class ProjectViewModel @Inject constructor(
     private val projectRepository: ProjectRepository,
     private val expenseRepository: ExpenseRepository,
-    private val taskRepository: TaskRepository
+    private val taskRepository: TaskRepository,
+    private val chatWebSocketService: ChatWebSocketService,
+    private val authRepository: AuthRepository
 ) : ViewModel() {
 
     companion object {
@@ -641,5 +645,73 @@ class ProjectViewModel @Inject constructor(
             message = null,
             errorMessage = null
         )
+    }
+
+    // WebSocket methods
+    fun connectToChat(projectId: String) {
+        Log.d(TAG, "Connecting to chat WebSocket for project: $projectId")
+        viewModelScope.launch {
+            try {
+                // Get auth token
+                val token = authRepository.getStoredToken()
+                if (token != null) {
+                    chatWebSocketService.setAuthToken(token)
+                    
+                    // Connect and setup message callback
+                    chatWebSocketService.connect { newMessage ->
+                        handleIncomingMessage(newMessage, projectId)
+                    }
+                    
+                    // Join the project room
+                    chatWebSocketService.joinProject(projectId)
+                } else {
+                    Log.e(TAG, "No auth token available for WebSocket connection")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error connecting to chat WebSocket", e)
+            }
+        }
+    }
+
+    fun disconnectFromChat(projectId: String) {
+        Log.d(TAG, "Disconnecting from chat WebSocket for project: $projectId")
+        viewModelScope.launch {
+            chatWebSocketService.leaveProject(projectId)
+        }
+    }
+
+    private fun handleIncomingMessage(message: ChatMessage, projectId: String) {
+        Log.d(TAG, "Received incoming message for project $projectId: ${message.id}")
+        
+        // Only add message if it belongs to the current project and not already present
+        val currentMessages = _uiState.value.messages
+        if (message.projectId == projectId && !currentMessages.any { it.id == message.id }) {
+            // Determine if message is from current user
+            viewModelScope.launch {
+                val currentUser = authRepository.getCurrentUser()
+                val isFromCurrentUser = message.senderId == currentUser?._id
+                
+                // Create updated message with correct isFromCurrentUser flag
+                val updatedMessage = ChatMessage(
+                    id = message.id,
+                    content = message.content,
+                    senderName = message.senderName,
+                    senderId = message.senderId,
+                    timestamp = message.timestamp,
+                    projectId = message.projectId,
+                    isFromCurrentUser = isFromCurrentUser
+                )
+                
+                val updatedMessages = currentMessages + updatedMessage
+                
+                _uiState.value = _uiState.value.copy(messages = updatedMessages)
+                Log.d(TAG, "Added new message to state. Total messages: ${updatedMessages.size}")
+            }
+        }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        chatWebSocketService.disconnect()
     }
 }
