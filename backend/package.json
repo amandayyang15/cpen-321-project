@@ -23,10 +23,11 @@
     "dotenv": "^17.2.3",
     "express": "^4.18.0",
     "google-auth-library": "^10.2.1",
-    "googleapis": "^164.0.0",
+    "googleapis": "^164.1.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.18.0",
     "multer": "^2.0.2",
+    "socket.io": "^4.8.1",
     "zod": "^4.1.1"
   },
   "devDependencies": {
