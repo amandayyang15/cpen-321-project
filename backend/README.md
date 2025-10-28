@@ -5,6 +5,8 @@
 - [Node.js](https://nodejs.org/en/download/) 18+ installed on your machine
 - [MongoDB](https://www.mongodb.com/) instance running locally or remotely
 
+To connect a user to Google Calendar, first request the user's email be added the google profile (since this is running a test version of the app. Contact Ricky Lin rickylin543@gmail.com). 
+Second, run the following node command `node enable-calendar-for-user.js "{email}"`
 ## Setup
 
 1. **Install dependencies**:
