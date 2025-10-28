@@ -5,7 +5,12 @@
 | **Change Date**   | **Modified Sections** | **Rationale** |
 | ----------------- | --------------------- | ------------- |
 | October 26th, 2026 | 4.6 Use Case Sequence Diagram | Added sequence diagrams for 5 use cases|
+| October 27th, 2026 | 3.4. Use Case Description*** | Updated wording to all be in active voice |
+| October 27th, 2026 |3.5. Formal Use Case Specifications (5 Most Major Use Cases)*** | Re-ordered failure scenarios to be chronological |
+| October 27th, 2026 |3.7. Non-Functional Requirements*** | Removed the incorrect/unecesary non-functional requirements |
+| October 27th, 2026 |3.2. Use Case Diagram*** | Changed to just be "Project User" and "Project Administrator"  |
 
+> *** Changes done based on the recommendation of our TA
 ---
 
 ## 2. Project Description
@@ -22,7 +27,7 @@ The app also integrates with Google Calendar to synchronize deadlines across all
 
 **Authentication**: To access app features, a user must Sign In using Google Authentication Service first. New users should Sign Up before Signing In. An authenticated user can Sign Out. Users can also remove their account. This authentication requires using Google's external API which will allow users to authenticate in our app with their Google accounts. We will use this to fulfill the "implement an authentication feature using an external authentication service" requirement via Google.
 
-**Manage Project**: User can create a project and become its owner. When creating a project, the project owner provides the project name. After creating the project, the project owner can view project details such as the project name. The group owner can also delete projects they own. Any user can view a list of active projects they own or have joined. A user can further view detailed information of groups where they are the owner or a member. If a new user joins the group while it is being viewed by another user, the list of members is automatically updated.
+**Manage Project**: User can create a project and become its owner. When creating a project, the project owner provides the project name. After creating the project, the project owner views project details such as the project name. The group owner can also delete projects they own. Any user views a list of active projects they own or have joined. A user can further view detailed information of groups where they are the owner or a member. If a new user joins the group while it is being viewed by another user, the list of members is automatically updated.
 
 **Manage Project Tasks**: Users can synchronize tasks with everyone else in the project. Users can add deadlines to tasks and assign them to specific users. Each task can have a status (e.g. "Not started", "In progress", "Completed", "Blocked", or "Backlog") so team members are aware of the progress on each task.
 
@@ -33,7 +38,7 @@ The app also integrates with Google Calendar to synchronize deadlines across all
 **Communicate With Members**: Enable chatting for projects: Users can use the chat feature for live communications with their teammates in the group. This feature will fulfill the "one of the features must involve changes happening in the app's content or state as a response to an external event" requirement as it is a multi-user chat.
 
 ### **3.2. Use Case Diagram**
-![Use Case Diagram](images/use_case_diagram.png)
+![Use Case Diagram](images/use_case_diagram_v2.png)
 
 
 
@@ -41,7 +46,7 @@ The app also integrates with Google Calendar to synchronize deadlines across all
 
 1. **Project User**: User who is invited to a project. Can add and view tasks on the project page. Users can also add resources to the resources tab and add/assign expenses to other users. Users can also chat with other members of a given project in the "chat" tab. Users can update the status of tasks in the project page. A user can also be a part of multiple projects at the same time.
 
-2. **Project Administrator**: User who manages a project. Can add and remove members. Can delete the project. Can edit project name, can assign user or administrator role to any other member of the project.
+2. **Project Administrator**: User who manages a project. Can add and remove members. Can delete the project. Can edit project name, can assign "Project User" or "Project Administrator" role to any other member of the project.
 
 ### **3.4. Use Case Description**
 
@@ -54,18 +59,18 @@ This feature enables users to securely sign up, sign in, sign out, and delete th
 
 3. **Returning user signs out**: The user is already logged into our app and clicks the "Sign Out" button to sign out of their account. They are redirected to the sign in/sign up page, where they can follow use case 1 or 2 in this section.
 
-4. **Returning user deletes account**: The user is already logged into our app and clicks the "Delete Account" button to delete their account. They are redirected to the sign in/sign up page, where they can follow use case 1 or 2 in this section. In addition, this will call a DELETE endpoint to remove this account from the backend.
+4. **Returning user deletes account**: The user is already logged into our app and clicks the "Delete Account" button to delete their account. They are redirected to the sign in/sign up page, where they can follow use case 1 or 2 in this section. In addition, this calls a DELETE endpoint to remove this account from the backend.
 
 **Use cases for feature 2: Manage Project**
 This feature allows users to create, join, view, and manage projects, including viewing project details and deleting projects they own, while keeping membership and project information up-to-date in real time.
 
-5. **Creating a new project**: From the home screen in our application, a user can click "Create Project" to create a new project. They can then enter project specific details by filling in the "Project Title", before the project is created. After submitting this, a POST endpoint is called to save this project data into the database.
+1. **Creating a new project**: From the home screen in our application, a user clicks  "Create Project" to create a new project. They can then enter project specific details by filling in the "Project Title", before the project is created. After submitting this, a POST endpoint is called to save this project data into the database.
 
-6. **Joining an existing project**: Users can join existing projects (created by other users) through email invitations or project codes.
+2. **Joining an existing project**: Users can join existing projects (created by other users) through email invitations or project codes.
 
-7. **Access/view projects**: From the home screen in our application, a user can view the projects they are currently a part of, and click on each specific project to view additional details, including tasks, chat, and expenses.
+3. **Access/view projects**: From the home screen in our application, a user views the projects they are currently a part of, and click on each specific project to view additional details, including tasks, chat, and expenses.
 
-8. **Delete project**: A user can click into a specific project and if they are the creator of this project, they can click "Delete project" to delete this project.
+4. **Delete project**: A user clicks into a specific project and if they are the creator of this project, they click "Delete project" to delete this project.
 
 **Use cases for feature 3: Manage Project Tasks**
 Users can create, edit, assign, and track tasks within a project, including setting deadlines and task status, ensuring all team members stay informed of progress.
@@ -90,7 +95,7 @@ Users can manage project expenses by adding, splitting, and tracking payments am
 
 15. **Add a new project expense and split this between project group**: Inside a specific project, users can click on the "Expenses" tab where they can click the "Add Expense" button to add a new project expense. They are prompted to enter the expense name, description, and amount. This expense will then appear in all the teammates' apps. The expense added will be equally split among all project memebers. For example, if a project has 4 memebers and a project member purchased an item worth $10, each project member will owe $2.50 to the project member that purchased it.
 
-16. **View outstanding balances owed to other teammates**: Inside a specific project, users can click on the "Expenses" tab where they can view all their outstanding expenses owed to other teammates. They can see the amount and teammate name for each expense. This information will be showed in a table.
+16. **View outstanding balances owed to other teammates**: Inside a specific project, users can click on the "Expenses" tab where they view all their outstanding expenses owed to other teammates. They can see the amount and teammate name for each expense. This information will be showed in a table.
 
 17. **Update an expense as complete if all money is paid, or pending if you require money from other teammates**: Inside a specific project, users can click on the "Expenses" tab, where they can update expenses as fully paid or pending. It should be noted that users can only update expenses that they previously created.
 
@@ -140,7 +145,7 @@ Users can chat in real time with project teammates, sending and receiving messag
 2. User clicks on the "Create Project" button.
 3. A form appears prompting the user to enter the project name and optional project description.
 4. User types in the project name and description in the corresponding text fields and clicks "Submit".
-5. User is taken to an invite page, where they can enter the email addresses of other users they want to invite to the project. Added email addresses by default will be a "Project user", but they can be changed to a "Project administrator" by clicking the role dropdown next to the corresponding email address.
+5. User is taken to an invite page, where they can enter the email addresses of other users they want to invite to the project. Added email addresses by default will be a "Project User", but they can be changed to a "Project Administrator" by clicking the role dropdown next to the corresponding email address.
 6. Once user is done entering all emails and adjusting roles as necessary, user clicks "Send Invites".
 7. User sees a success message confirming the project has been created and that invitations have been sent to the added members.
 8. User is redirected to the home screen, where the newly created project is now visible.
@@ -258,7 +263,7 @@ Users can chat in real time with project teammates, sending and receiving messag
     - **Justification**: It is important that there is no loss in data or incorrect data processing, especially for financial calculations where accuracy is critical.
     - **Source(s)**: https://www.altexsoft.com/blog/non-functional-requirements/
 3. **Usability**
-    - **Description**: Users should be able to find desired information/actions within 3 clicks from the project dashboard. The most frequently used features must be easily accessible and reached with minimal navigation.
+    - **Description**: Users should be able to find desired information/actions within 3 clicks from the project dashboard. The most frequently used features must be easily accessible and reached with minimal navigation. For example, accessing the UI for creating a task should be in a minimal number of clicks from the dashboard.
     - **Justification**: Easy to use and pleasant application features are important in positive user experience.
     - **Source(s)**: https://www.nngroup.com/articles/usability-101-introduction-to-usability/, https://www.statista.com/statistics/433871/daily-social-media-usage-worldwide/?srsltid=AfmBOore4jK-WKJfo1M9W6h1PtNfaS07bVAFjEfdrizsx1wlx8lZ8Qio
 4. **Availability**
@@ -319,7 +324,6 @@ Users can chat in real time with project teammates, sending and receiving messag
 
 ![Dependencies Diagram](images\dependencies_diagram.png)
 
-> Below sections are not required for M1.
 ### **4.6. Use Case Sequence Diagram (5 Most Major Use Cases)**
 
 1. [**Create a New Project**]
@@ -330,7 +334,7 @@ Users can chat in real time with project teammates, sending and receiving messag
 ![Sequence3](https://github.com/user-attachments/assets/00f3865e-9bb1-4ff0-84de-d4d35cf07ab1)
 4. [**Create Project Task**]
 ![Sequence4](https://github.com/user-attachments/assets/9312309f-ed78-43d1-a533-43d32db42f39)
-5. [**Invite Users To Project**] 
+5. [**Invite Users To Project**]
 ![Sequence5](https://github.com/user-attachments/assets/e418e536-c311-4879-8bc3-20283612fb91)
 
 ### **4.7. Design and Ways to Test Non-Functional Requirements**
@@ -338,11 +342,5 @@ Users can chat in real time with project teammates, sending and receiving messag
 1. [**Performance**](#nfr1)
     - **Validation**: Load testing with simulated user interactions, response time monitoring, and automated testing of UI navigation speeds.
 
-2. **Reliability**
-    - **Validation**: Unit testing for financial calculations, data integrity checks, and automated backup/recovery testing.
-
-3. **Usability**
+2. **Usability**
     - **Validation**: User testing sessions to verify 3-click rule compliance and usability studies for frequently used features.
-
-4. **Availability**
-    - **Validation**: System monitoring tools, uptime tracking, and scheduled maintenance testing during low-usage periods.
