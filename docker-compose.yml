@@ -25,6 +25,7 @@ services:
     depends_on:
       - mongo
     command: npm start
+    mem_limit: 2g
 
 volumes:
   mongo_data: 
