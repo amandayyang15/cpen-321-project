@@ -7,8 +7,9 @@
 | October 26th, 2026 | 4.6 Use Case Sequence Diagram | Added sequence diagrams for 5 use cases|
 | October 27th, 2026 | 3.4. Use Case Description*** | Updated wording to all be in active voice |
 | October 27th, 2026 |3.5. Formal Use Case Specifications (5 Most Major Use Cases)*** | Re-ordered failure scenarios to be chronological |
-| October 27th, 2026 |3.7. Non-Functional Requirements*** | Removed the incorrect/unecesary non-functional requirements |
-
+| October 27th, 2026 |3.7. Non-Functional Requirements*** | Removed the incorrect/unecesary non-functional requirements and added more detail to the "Usability" use case |
+| October 27th, 2026 |3.2. Use Case Diagram*** | Changed to just be "Project User" and "Project Administrator"  |
+| October 27th, 2026 |3.2. Use Case Diagram*** | Changed to just be "Project User" and "Project Administrator"  |
 > *** Changes done based on the recommendation of our TA
 
 ---
@@ -38,7 +39,7 @@ The app also integrates with Google Calendar to synchronize deadlines across all
 **Communicate With Members**: Enable chatting for projects: Users can use the chat feature for live communications with their teammates in the group. This feature will fulfill the "one of the features must involve changes happening in the app's content or state as a response to an external event" requirement as it is a multi-user chat.
 
 ### **3.2. Use Case Diagram**
-![Use Case Diagram](images/use_case_diagram.png)
+![Use Case Diagram](images/use_case_diagram_v2.png)
 
 
 
@@ -46,7 +47,7 @@ The app also integrates with Google Calendar to synchronize deadlines across all
 
 1. **Project User**: User who is invited to a project. Can add and view tasks on the project page. Users can also add resources to the resources tab and add/assign expenses to other users. Users can also chat with other members of a given project in the "chat" tab. Users can update the status of tasks in the project page. A user can also be a part of multiple projects at the same time.
 
-2. **Project Administrator**: User who manages a project. Can add and remove members. Can delete the project. Can edit project name, can assign user or administrator role to any other member of the project.
+2. **Project Administrator**: User who manages a project. Can add and remove members. Can delete the project. Can edit project name, can assign "Project User" or "Project Administrator" role to any other member of the project.
 
 ### **3.4. Use Case Description**
 
@@ -145,7 +146,7 @@ Users can chat in real time with project teammates, sending and receiving messag
 2. User clicks on the "Create Project" button.
 3. A form appears prompting the user to enter the project name and optional project description.
 4. User types in the project name and description in the corresponding text fields and clicks "Submit".
-5. User is taken to an invite page, where they can enter the email addresses of other users they want to invite to the project. Added email addresses by default will be a "Project user", but they can be changed to a "Project administrator" by clicking the role dropdown next to the corresponding email address.
+5. User is taken to an invite page, where they can enter the email addresses of other users they want to invite to the project. Added email addresses by default will be a "Project user", but they can be changed to a "Project Administrator" by clicking the role dropdown next to the corresponding email address.
 6. Once user is done entering all emails and adjusting roles as necessary, user clicks "Send Invites".
 7. User sees a success message confirming the project has been created and that invitations have been sent to the added members.
 8. User is redirected to the home screen, where the newly created project is now visible.
@@ -258,7 +259,7 @@ Users can chat in real time with project teammates, sending and receiving messag
     - **Justification**: Quick response times are essential for maintaining smooth user flow and productivity. Delays in response and feedback would be disruptive and negatively affect user experience.
     - **Source(s)**: https://www.nngroup.com/articles/response-times-3-important-limits/
 2. **Usability**
-    - **Description**: Users should be able to find desired information/actions within 3 clicks from the project dashboard. The most frequently used features must be easily accessible and reached with minimal navigation.
+    - **Description**: Users should be able to find desired information/actions within 3 clicks from the project dashboard. The most frequently used features must be easily accessible and reached with minimal navigation. For example, accessing the UI for creating a task should be in a minimal number of clicks from the dashboard.
     - **Justification**: Easy to use and pleasant application features are important in positive user experience.
     - **Source(s)**: https://www.nngroup.com/articles/usability-101-introduction-to-usability/, https://www.statista.com/statistics/433871/daily-social-media-usage-worldwide/?srsltid=AfmBOore4jK-WKJfo1M9W6h1PtNfaS07bVAFjEfdrizsx1wlx8lZ8Qio
 ---
@@ -326,7 +327,7 @@ Users can chat in real time with project teammates, sending and receiving messag
 ![Sequence3](https://github.com/user-attachments/assets/00f3865e-9bb1-4ff0-84de-d4d35cf07ab1)
 4. [**Create Project Task**]
 ![Sequence4](https://github.com/user-attachments/assets/9312309f-ed78-43d1-a533-43d32db42f39)
-5. [**Invite Users To Project**] 
+5. [**Invite Users To Project**]
 ![Sequence5](https://github.com/user-attachments/assets/e418e536-c311-4879-8bc3-20283612fb91)
 
 ### **4.7. Design and Ways to Test Non-Functional Requirements**
