@@ -12,7 +12,7 @@ RUN npm ci
 COPY . .
 
 # build typescript
-# RUN npm run build
+RUN npm run build
 
 EXPOSE $PORT
 
