@@ -5,6 +5,11 @@
 | **Change Date**   | **Modified Sections** | **Rationale** |
 | ----------------- | --------------------- | ------------- |
 | October 26th, 2026 | 4.6 Use Case Sequence Diagram | Added sequence diagrams for 5 use cases|
+| October 27th, 2026 | 3.4. Use Case Description*** | Updated wording to all be in active voice |
+| October 27th, 2026 |3.5. Formal Use Case Specifications (5 Most Major Use Cases)*** | Re-ordered failure scenarios to be chronological |
+| October 27th, 2026 |3.7. Non-Functional Requirements*** | Removed the incorrect/unecesary non-functional requirements |
+
+> *** Changes done based on the recommendation of our TA
 
 ---
 
