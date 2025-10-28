@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'backend/**'
+      - '.github/workflows/deploy.yml'
 
 jobs:
   deploy:
@@ -15,32 +18,32 @@ jobs:
       - name: Copy files to EC2
         uses: appleboy/scp-action@master
         with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_KEY }}
-          source: "."
-          target: "/home/ubuntu/cpen321-project"
+          host: ${{secrets.EC2_HOST}}
+          username: ${{secrets.EC2_USER}}
+          key: ${{secrets.EC2_KEY}}
+          source: "backend"
+          target: "/home/ubuntu/cpen321-project/"
 
-      - name: Rebuild and Redeploy
+      - name: Rebuild and Deploy 
         uses: appleboy/ssh-action@master
         with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_KEY }}
+          host: ${{secrets.EC2_HOST}}
+          username: ${{secrets.EC2_USER}}
+          key: ${{secrets.EC2_KEY}}
           script: |
-            cd /home/ubuntu/cpen321-project
+            cd /home/ubuntu/cpen321-project/backend
+
             # Write secrets into .env
             cat > .env <<EOF
-            PORT=${{ secrets.PROD_PORT }}
-            MONGODB_URI=${{ secrets.PROD_MONGODB_URI }}
-            GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}
-            JWT_SECRET=${{ secrets.JWT_SECRET }}
+            PORT=${{secrets.PROD_PORT}}
+            MONGODB_URI=${{secrets.PROD_DB_URI}}
             EOF
 
-            # Give .env permissions
+            #give .env perms
             chmod 600 .env
 
-            # Build and run container
+            # build and run container
             docker-compose down
+
             docker-compose --env-file .env build
             docker-compose --env-file .env up -d
