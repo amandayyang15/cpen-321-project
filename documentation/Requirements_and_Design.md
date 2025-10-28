@@ -5,6 +5,7 @@
 | **Change Date**   | **Modified Sections** | **Rationale** |
 | ----------------- | --------------------- | ------------- |
 | October 26th, 2026 | 4.6 Use Case Sequence Diagram | Added sequence diagrams for 5 use cases|
+| October 27th, 2026 | 4.7 Design and Ways to Test Non-Functional Requirements | Added testing methods for non-functional requirements|
 | October 27th, 2026 | 3.4. Use Case Description*** | Updated wording to all be in active voice |
 | October 27th, 2026 |3.5. Formal Use Case Specifications (5 Most Major Use Cases)*** | Re-ordered failure scenarios to be chronological |
 | October 27th, 2026 |3.7. Non-Functional Requirements*** | Removed the incorrect/unecesary non-functional requirements and added more detail to the "Usability" use case |
@@ -332,8 +333,9 @@ Users can chat in real time with project teammates, sending and receiving messag
 ### **4.7. Design and Ways to Test Non-Functional Requirements**
 
 1. [**Performance**](#nfr1)
-    - **Validation**: Load testing with simulated user interactions, response time monitoring, and automated testing of UI navigation speeds.
-
+    - **Implementation**: Only load recent chat messages, not the entire history. Wait 300ms after user stops typing before searching.
+    - **Testing Approach**: Time how long it takes to load a project page (should be under 1 second). Have multiple people use the app at the same time and see if it slows down. Check that switching between tabs feels instant.
 
 3. [**Usability**](#nfr2)
-    - **Validation**: User testing sessions to verify 3-click rule compliance and usability studies for frequently used features.
+    - **Implementation**: Keep the same menu in the same place on every screen. Put "Create Task" and "Send Message" buttons where they're easy to find. Make buttons big enough to tap easily. Show loading spinners when something is processing.
+    - **Testing Approac**h: Ask friends to try creating a task - count how many clicks it takes. See if people can figure out how to add expenses without instructions. Test if everything works using only keyboard navigation. Watch someone use the app for 5 minutes and see where they get confused.
