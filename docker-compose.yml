@@ -20,6 +20,7 @@ services:
     environment:
       - MONGODB_URI=${MONGODB_URI}
       - PORT=${PORT}
+      - NODE_OPTIONS=--max-old-space-size=3072
     ports:
       - "${PORT}:${PORT}"
     depends_on:
