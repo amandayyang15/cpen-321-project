@@ -53,7 +53,7 @@ The app also integrates with Google Calendar to synchronize deadlines across all
 
 **Use cases for feature 1: Authentication**
 This feature enables users to securely sign up, sign in, sign out, and delete their accounts in the app using Google's external authentication service.
-
+> MVP Implementation Difference: The implementation uses Google OAuth exclusively with a unified authentication flow rather than separate sign-in and sign-up buttons. Both actions use the same Google credential retrieval mechanism, eliminating the distinct "Create a new Google account" button described in the document.
 1. **User registers/signs up for the first time**: The user opens the app and clicks sign up to create an account. We will utilize the Google authentication provided in M1, so users will only have the option to create an account through their existing Google account.
 
 2. **Returning user signs in**: The user opens the app and clicks sign in to log into our app with their registered credentials. We will utilize the Google authentication provided in M1, so users will only have the option to log in through their existing Google account.
@@ -66,6 +66,7 @@ This feature enables users to securely sign up, sign in, sign out, and delete th
 This feature allows users to create, join, view, and manage projects, including viewing project details and deleting projects they own, while keeping membership and project information up-to-date in real time.
 
 1. **Creating a new project**: From the home screen in our application, a user clicks "Create Project" to create a new project. They then enter project specific details by filling in the "Project Title", before the project is created. After submitting this, a POST endpoint is called to save this project data into the database.
+>MVP Implementation Difference: Projects are created immediately with only name and description, and invitation codes must be shared manually. Member roles and invitations are managed after project creation rather than during the creation process.
 
 2. **Joining an existing project**: Users join existing projects (created by other users) through email invitations or project codes.
 
@@ -75,6 +76,7 @@ This feature allows users to create, join, view, and manage projects, including 
 
 **Use cases for feature 3: Manage Project Tasks**
 Users can create, edit, assign, and track tasks within a project, including setting deadlines and task status, ensuring all team members stay informed of progress.
+>MVP Implementation Difference: Task creation uses a single-form dialog. All task details including name, assignee, status, and deadline are entered in one dialog before submission. Tasks display with color-coded status indicators (green for completed, gold for in progress, purple for backlog, red for blocked, blue for not started) for enhanced visual feedback.
 
 1. **Add a new task with a deadline**: Inside a specific project, a user clicks "Add task" to add a new task to the project task screen. They are prompted to add a name, description, assignees, and deadline. By default, the task status will be set to "In progress".
 
@@ -93,7 +95,7 @@ Users can link their Google Calendar to project tasks, automatically syncing dea
 
 **Use cases for feature 5: Manage Project Resources**
 Users can manage project expenses by adding, splitting, and tracking payments among team members, as well as share common resources, with all calculations handled internally by the app.
-
+>MVP Implementation Difference: Expenses are automatically split equally among selected members rather than allowing custom split amounts. Users select members via checkboxes but cannot specify different amounts per person. The expense view displays a detailed table format showing all expense information including per-person amounts.
 1. **Add a new project expense and split this between project group**: Inside a specific project, users click on the "Expenses" tab where they click the "Add Expense" button to add a new project expense. They are prompted to enter the expense name, description, and amount. This expense then appears in all the teammates' apps. The expense added is equally split among all project members. For example, if a project has 4 members and a project member purchased an item worth $10, each project member will owe $2.50 to the project member that purchased it.
 
 2. **View outstanding balances owed to other teammates**: Inside a specific project, users click on the "Expenses" tab where they view all their outstanding expenses owed to other teammates. They see the amount and teammate name for each expense. This information is shown in a table.
@@ -102,6 +104,7 @@ Users can manage project expenses by adding, splitting, and tracking payments am
 
 **Use cases for feature 6: Communicate With Members**
 Users can chat in real time with project teammates, sending and receiving messages with notifications, allowing dynamic communication that updates the app's state based on external events.
+>MVP Implementation Difference: The chat system uses WebSocket connections (Socket.IO) for real-time messaging instead of HTTP polling. Messages are delivered instantly through persistent connections. The "sent" indicator replaced with a loading spinner during message transmission.
 
 1. **Communicate/chat with group members in an existing project through the chat tab**: Inside a specific project, users click on the "Chat" tab, where they chat with all members of their team. To send a new message, they enter their message and press "Send".
 
@@ -122,6 +125,7 @@ Users can chat in real time with project teammates, sending and receiving messag
 2. User clicks the "Google sign-in" button and is prompted to enter their email and password.
 3. User enters this information and clicks "Next".
 4. User successfully logs in with Google, and lands on the home page.
+>MVP Implementation Difference: Steps 5-7 are not implemented. Projects are created immediately after step 4 without an invite page. Users share the generated invitation code manually, and member management occurs after project creation through the Project Settings tab (available only to admins).
 
 **Failure scenario(s)**:
 - 1a. Rate limit
@@ -132,7 +136,7 @@ Users can chat in real time with project teammates, sending and receiving messag
     - 2a2. System prompts user to sign in again before continuing
 - 3a. Server network error (can't connect to server)
     - 3a1. System displays an error message to the user indicating it cannot connect to the server
-
+>MVP Implementation Difference: Failure scenario 4a is not implemented because direct email invitation functionality has not been integrated. Users join projects using invitation codes only.
 <a name="uc2"></a>
 
 #### Use Case 2: Creating a New Project
@@ -151,6 +155,7 @@ Users can chat in real time with project teammates, sending and receiving messag
 7. User sees a success message confirming the project has been created and that invitations have been sent to the added members.
 8. User is redirected to the home screen, where the newly created project is now visible.
 9. User clicks on the project to view additional details, including project name, members, and tabs for tasks, chat, and expenses (which are initially empty).
+>MVP Implementation Difference: Steps 5-7 are not implemented. Projects are created immediately after step 4 without an invite page. Users share the generated invitation code manually, and member management occurs after project creation through the Project Settings tab (available only to admins).
 
 **Failure scenario(s)**:
 - 1a. User is not signed in
@@ -162,7 +167,7 @@ Users can chat in real time with project teammates, sending and receiving messag
     - 4a3. If the user tries to send an invite with invalid emails, they have the option to select "Ignore Invalid Users" and proceed with the valid ones
 - 6a. Network error
     - 6a1. If the app cannot connect to the server, it shows an error message letting the user know there is a network issue
-
+> MVP Implementation Difference: Failure scenario 4a is not implemented because direct email invitation functionality has not been integrated. Users join projects using invitation codes only.
 <a name="uc3"></a>
 
 #### Use Case 3: Communicate/Chat With Group Members in an Existing Project
@@ -180,6 +185,7 @@ Users can chat in real time with project teammates, sending and receiving messag
 6. User clicks "Send". A successfully delivered message will have "sent" indicator underneath the last successfully sent message.
 7. All project members see the message immediately and can react or reply.
 8. If there is a network problem, the app displays an error indicating it cannot send the message.
+>MVP Implementation Difference: Step 6 is implemented differently. Instead of a "sent" indicator underneath messages, the system displays a loading spinner on the send button during message transmission. Messages appear instantly for all users through WebSocket connections rather than HTTP polling.
 
 **Failure scenario(s)**:
 - 6a. Sending too many messages (Rate limit)
@@ -206,6 +212,7 @@ Users can chat in real time with project teammates, sending and receiving messag
 6. User clicks on "Submit".
 7. User gets brought back to the expenses tab.
 8. User views the updated expenses tab which includes the new expense that was just added. Other group members can view the updated expenses on the expenses tab too.
+>MVP Implementation Difference: Step 5 includes additional fields not mentioned in the description. Users must select who paid for the expense and use checkboxes to select which members to split the expense between. The expense is automatically split equally among selected members rather than allowing custom split amounts. Step 8 displays expenses in a detailed table format showing description, amount, paid by, split between, and per-person amounts.
 
 **Failure scenario(s)**:
 - 1a. User is not authenticated
@@ -235,6 +242,7 @@ Users can chat in real time with project teammates, sending and receiving messag
 7. User enters this information and clicks on "Submit", and returns back to the project dashboard page.
 8. User clicks on the task board page of the project.
 9. User sees the task board added with a new task, with its corresponding name, description, deadline, and assigned users.
+>MVP Implementation Difference: Steps 4-7 are implemented as a single dialog form instead of a two-step process. The "Create Task" button is accessible from the main project view, and users enter task name, select a single assignee from a dropdown (not multiple via checkboxes), choose status from a dropdown, and pick a deadline using a date picker all in one dialog before clicking "Create". Step 2 references an "Existing Project" button that doesn't exist in the implementation. Step 9 displays tasks with color-coded status indicators (green for completed, gold for in progress, purple for backlog, red for blocked, blue for not started) which provides enhanced visual feedback beyond the basic display described.
 
 **Failure scenario(s)**:
 - 1a. User is not authenticated
