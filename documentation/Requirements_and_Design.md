@@ -9,7 +9,6 @@
 | October 27th, 2026 |3.5. Formal Use Case Specifications (5 Most Major Use Cases)*** | Re-ordered failure scenarios to be chronological |
 | October 27th, 2026 |3.7. Non-Functional Requirements*** | Removed the incorrect/unecesary non-functional requirements and added more detail to the "Usability" use case |
 | October 27th, 2026 |3.2. Use Case Diagram*** | Changed to just be "Project User" and "Project Administrator"  |
-| October 27th, 2026 |3.2. Use Case Diagram*** | Changed to just be "Project User" and "Project Administrator"  |
 > *** Changes done based on the recommendation of our TA
 
 ---
@@ -316,7 +315,6 @@ Users can chat in real time with project teammates, sending and receiving messag
 
 ![Dependencies Diagram](images\dependencies_diagram.png)
 
-> Below sections are not required for M1.
 ### **4.6. Use Case Sequence Diagram (5 Most Major Use Cases)**
 
 1. [**Create a New Project**]
@@ -335,11 +333,6 @@ Users can chat in real time with project teammates, sending and receiving messag
 1. [**Performance**](#nfr1)
     - **Validation**: Load testing with simulated user interactions, response time monitoring, and automated testing of UI navigation speeds.
 
-2. **Reliability**
-    - **Validation**: Unit testing for financial calculations, data integrity checks, and automated backup/recovery testing.
 
 3. **Usability**
     - **Validation**: User testing sessions to verify 3-click rule compliance and usability studies for frequently used features.
-
-4. **Availability**
-    - **Validation**: System monitoring tools, uptime tracking, and scheduled maintenance testing during low-usage periods.
