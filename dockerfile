@@ -13,7 +13,7 @@ RUN npm ci
 
 # build typescript
 COPY backend/ .
-RUN npm run build
+# RUN npm run build
 
 EXPOSE $PORT
 
