@@ -48,58 +48,58 @@ The app also integrates with Google Calendar to synchronize deadlines across all
 **Use cases for feature 1: Authentication**
 This feature enables users to securely sign up, sign in, sign out, and delete their accounts in the app using Google's external authentication service.
 
-1. **User registers/signs up for the first time**: The user opens the app, and clicks sign up to create an account. We will utilize the Google authentication provided in M1, so users will only have the option to create an account through their existing Google account.
+1. **User registers/signs up for the first time**: The user opens the app and clicks sign up to create an account. We will utilize the Google authentication provided in M1, so users will only have the option to create an account through their existing Google account.
 
-2. **Returning user signs in**: The user opens the app, and clicks sign in to log into our app with their registered credentials. We will utilize the Google authentication provided in M1, so users will only have the option to log in through their existing Google account.
+2. **Returning user signs in**: The user opens the app and clicks sign in to log into our app with their registered credentials. We will utilize the Google authentication provided in M1, so users will only have the option to log in through their existing Google account.
 
 3. **Returning user signs out**: The user is already logged into our app and clicks the "Sign Out" button to sign out of their account. They are redirected to the sign in/sign up page, where they can follow use case 1 or 2 in this section.
 
-4. **Returning user deletes account**: The user is already logged into our app and clicks the "Delete Account" button to delete their account. They are redirected to the sign in/sign up page, where they can follow use case 1 or 2 in this section. In addition, this will call a DELETE endpoint to remove this account from the backend.
+4. **Returning user deletes account**: The user is already logged into our app and clicks the "Delete Account" button to delete their account. They are redirected to the sign in/sign up page, where they can follow use case 1 or 2 in this section. In addition, this calls a DELETE endpoint to remove this account from the backend.
 
 **Use cases for feature 2: Manage Project**
 This feature allows users to create, join, view, and manage projects, including viewing project details and deleting projects they own, while keeping membership and project information up-to-date in real time.
 
-5. **Creating a new project**: From the home screen in our application, a user can click "Create Project" to create a new project. They can then enter project specific details by filling in the "Project Title", before the project is created. After submitting this, a POST endpoint is called to save this project data into the database.
+1. **Creating a new project**: From the home screen in our application, a user clicks "Create Project" to create a new project. They then enter project specific details by filling in the "Project Title", before the project is created. After submitting this, a POST endpoint is called to save this project data into the database.
 
-6. **Joining an existing project**: Users can join existing projects (created by other users) through email invitations or project codes.
+2. **Joining an existing project**: Users join existing projects (created by other users) through email invitations or project codes.
 
-7. **Access/view projects**: From the home screen in our application, a user can view the projects they are currently a part of, and click on each specific project to view additional details, including tasks, chat, and expenses.
+3. **Access/view projects**: From the home screen in our application, a user views the projects they are currently a part of and clicks on each specific project to view additional details, including tasks, chat, and expenses.
 
-8. **Delete project**: A user can click into a specific project and if they are the creator of this project, they can click "Delete project" to delete this project.
+4. **Delete project**: A user clicks into a specific project and if they are the creator of this project, they click "Delete project" to delete this project.
 
 **Use cases for feature 3: Manage Project Tasks**
 Users can create, edit, assign, and track tasks within a project, including setting deadlines and task status, ensuring all team members stay informed of progress.
 
-9. **Add a new task with a deadline**: Inside a specific project, a user can click "Add task" to add a new task to the project task screen. They are prompted to add a name, description, assignees, and deadline. By default, the task status will be set to "In progress".
+1. **Add a new task with a deadline**: Inside a specific project, a user clicks "Add task" to add a new task to the project task screen. They are prompted to add a name, description, assignees, and deadline. By default, the task status will be set to "In progress".
 
-10. **Edit an existing task**: Inside a specific project, a user can click a task to edit information. After clicking "Save", this data will be updated in the database through a PUT request.
+2. **Edit an existing task**: Inside a specific project, a user clicks a task to edit information. After clicking "Save", this data is updated in the database through a PUT request.
 
-11. **Update status of a task**: Inside a specific project, on the project task screen, a user can update a task dropdown to change the status of a task (in progress, complete, backlog). This will be updated in the database through a PUT request.
+3. **Update status of a task**: Inside a specific project, on the project task screen, a user updates a task dropdown to change the status of a task (in progress, complete, backlog). This is updated in the database through a PUT request.
 
-12. **View all project tasks**: Inside a specific project, users will see a project task screen with all current tasks for the project. They are able to scroll down to view all the tasks.
+4. **View all project tasks**: Inside a specific project, users see a project task screen with all current tasks for the project. They are able to scroll down to view all the tasks.
 
 **Use cases for feature 4: Sync Project Deadlines Across all Members**
 Users can link their Google Calendar to project tasks, automatically syncing deadlines and receiving notifications, keeping everyone aligned using the Google Calendar API.
 
-13. **Allow app access to your Google Calendar**: After creating your account, users will be prompted to allow the app access to your Google Calendar. You also are able to change this through the Settings tab at a later time.
+1. **Allow app access to your Google Calendar**: After creating your account, users are prompted to allow the app access to your Google Calendar. You are also able to change this through the Settings tab at a later time.
 
-14. **Sync project tasks assigned to you to your Google Calendar**: Assuming you allow access, any project tasks assigned to you will be synced with your Google Calendar through the Google Calendar external API and will appear in your Google Calendar on the deadline date.
+2. **Sync project tasks assigned to you to your Google Calendar**: Assuming you allow access, any project tasks assigned to you are synced with your Google Calendar through the Google Calendar external API and appear in your Google Calendar on the deadline date.
 
 **Use cases for feature 5: Manage Project Resources**
 Users can manage project expenses by adding, splitting, and tracking payments among team members, as well as share common resources, with all calculations handled internally by the app.
 
-15. **Add a new project expense and split this between project group**: Inside a specific project, users can click on the "Expenses" tab where they can click the "Add Expense" button to add a new project expense. They are prompted to enter the expense name, description, and amount. This expense will then appear in all the teammates' apps. The expense added will be equally split among all project memebers. For example, if a project has 4 memebers and a project member purchased an item worth $10, each project member will owe $2.50 to the project member that purchased it.
+1. **Add a new project expense and split this between project group**: Inside a specific project, users click on the "Expenses" tab where they click the "Add Expense" button to add a new project expense. They are prompted to enter the expense name, description, and amount. This expense then appears in all the teammates' apps. The expense added is equally split among all project members. For example, if a project has 4 members and a project member purchased an item worth $10, each project member will owe $2.50 to the project member that purchased it.
 
-16. **View outstanding balances owed to other teammates**: Inside a specific project, users can click on the "Expenses" tab where they can view all their outstanding expenses owed to other teammates. They can see the amount and teammate name for each expense. This information will be showed in a table.
+2. **View outstanding balances owed to other teammates**: Inside a specific project, users click on the "Expenses" tab where they view all their outstanding expenses owed to other teammates. They see the amount and teammate name for each expense. This information is shown in a table.
 
-17. **Update an expense as complete if all money is paid, or pending if you require money from other teammates**: Inside a specific project, users can click on the "Expenses" tab, where they can update expenses as fully paid or pending. It should be noted that users can only update expenses that they previously created.
+3. **Update an expense as complete if all money is paid, or pending if you require money from other teammates**: Inside a specific project, users click on the "Expenses" tab, where they update expenses as fully paid or pending. It should be noted that users can only update expenses that they previously created.
 
 **Use cases for feature 6: Communicate With Members**
 Users can chat in real time with project teammates, sending and receiving messages with notifications, allowing dynamic communication that updates the app's state based on external events.
 
-18. **Communicate/chat with group members in an existing project through the chat tab**: Inside a specific project, users can click on the "Chat" tab, where they can chat with all members of their team. To send a new message, they can enter their message and press "Send".
+1. **Communicate/chat with group members in an existing project through the chat tab**: Inside a specific project, users click on the "Chat" tab, where they chat with all members of their team. To send a new message, they enter their message and press "Send".
 
-19. **Receive chat notifications**: If a user is using the app and someone messages a chat in a project that they are part of, they will receive a pop-up notification to notify them.
+2. **Receive chat notifications**: If a user is using the app and someone messages a chat in a project that they are part of, they receive a pop-up notification to notify them.
 
 ### **3.5. Formal Use Case Specifications (5 Most Major Use Cases)**
 
@@ -147,13 +147,13 @@ Users can chat in real time with project teammates, sending and receiving messag
 9. User clicks on the project to view additional details, including project name, members, and tabs for tasks, chat, and expenses (which are initially empty).
 
 **Failure scenario(s)**:
+- 1a. User is not signed in
+    - 1a1. If the user tries to create a project without being signed in, the app prevents them from continuing
+    - 1a2. The app prompts the user to sign in before they can create a project
 - 4a. User enters invalid email
     - 4a1. User types an email address that is not valid
     - 4a2. The app shows a warning next to the email address indicating that the email is invalid
     - 4a3. If the user tries to send an invite with invalid emails, they have the option to select "Ignore Invalid Users" and proceed with the valid ones
-- 1a. User is not signed in
-    - 1a1. If the user tries to create a project without being signed in, the app prevents them from continuing
-    - 1a2. The app prompts the user to sign in before they can create a project
 - 6a. Network error
     - 6a1. If the app cannot connect to the server, it shows an error message letting the user know there is a network issue
 
@@ -202,12 +202,12 @@ Users can chat in real time with project teammates, sending and receiving messag
 8. User views the updated expenses tab which includes the new expense that was just added. Other group members can view the updated expenses on the expenses tab too.
 
 **Failure scenario(s)**:
-- 5a. Invalid input
-    - 5a1. User adds a non-positive amount or text string
-    - 5a2. System prompts user to input a valid numeric positive amount
 - 1a. User is not authenticated
     - 1a1. System rejects user when the user attempts to add an expense
     - 1a2. System prompts user to sign in again before continuing
+- 5a. Invalid input
+    - 5a1. User adds a non-positive amount or text string
+    - 5a2. System prompts user to input a valid numeric positive amount
 - 6a. Server network error (can't connect to server)
     - 6a1. System displays an error message to the user indicating it cannot connect to the server
 
@@ -231,12 +231,12 @@ Users can chat in real time with project teammates, sending and receiving messag
 9. User sees the task board added with a new task, with its corresponding name, description, deadline, and assigned users.
 
 **Failure scenario(s)**:
-- 7a. Invalid input
-    - 7a1. User adds an invalid date
-    - 7a2. System prompts user to input a valid future date
 - 1a. User is not authenticated
     - 1a1. System rejects user when the user attempts to create a task
     - 1a2. System prompts user to sign in again before continuing
+- 7a. Invalid input
+    - 7a1. User adds an invalid date
+    - 7a2. System prompts user to input a valid future date
 - 7b. Server network error (can't connect to server)
     - 7b1. System displays an error message to the user indicating it cannot connect to the server
 
@@ -252,19 +252,10 @@ Users can chat in real time with project teammates, sending and receiving messag
     - **Description**: Description: The system must provide timely, responsive user interactions with appropriate feedback mechanisms. Basic UI navigation such as selecting tasks and navigating between tabs must respond within 0.1 second to feel instantaneous. Slightly more complex interactions, like navigating between project views and retrieving data, must respond within 1 second to preserve the user’s flow of thought. More complicated tasks that take longer should provide visual feedback: operations exceeding 10 seconds must display a progress indicator and allow interruption, while tasks between 2 and 10 seconds should at least provide lighter feedback (e.g., a busy cursor or loading animation).
     - **Justification**: Quick response times are essential for maintaining smooth user flow and productivity. Delays in response and feedback would be disruptive and negatively affect user experience.
     - **Source(s)**: https://www.nngroup.com/articles/response-times-3-important-limits/
-
-2. **Reliability**
-    - **Description**: All financial calculations must be processed with 100% accuracy, as the system must ensure data integrity at all times. The system must also be able to handle and recover from errors without data loss.
-    - **Justification**: It is important that there is no loss in data or incorrect data processing, especially for financial calculations where accuracy is critical.
-    - **Source(s)**: https://www.altexsoft.com/blog/non-functional-requirements/
-3. **Usability**
+2. **Usability**
     - **Description**: Users should be able to find desired information/actions within 3 clicks from the project dashboard. The most frequently used features must be easily accessible and reached with minimal navigation.
     - **Justification**: Easy to use and pleasant application features are important in positive user experience.
     - **Source(s)**: https://www.nngroup.com/articles/usability-101-introduction-to-usability/, https://www.statista.com/statistics/433871/daily-social-media-usage-worldwide/?srsltid=AfmBOore4jK-WKJfo1M9W6h1PtNfaS07bVAFjEfdrizsx1wlx8lZ8Qio
-4. **Availability**
-    - **Description**: The application system should have minimal down time, ideally no less than 99.999% availability. For maintenance, the system may have a downtime of 30 minutes between 2AM and 4AM due to projected decreased usage during this duration.
-    - **Justification**: Higher availability of the system reduces downtime risks and increases user confidence in the application.
-    - **Source(s)**: https://www.statista.com/statistics/433871/daily-social-media-usage-worldwide/?srsltid=AfmBOore4jK-WKJfo1M9W6h1PtNfaS07bVAFjEfdrizsx1wlx8lZ8Qio, https://www.cloudflare.com/en-gb/learning/performance/glossary/application-availability/
 ---
 
 ## 4. Design Specification
