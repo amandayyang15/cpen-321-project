@@ -343,6 +343,12 @@ export class TaskController {
         }
 
         try {
+          // Format status for display
+          const statusDisplay = this.formatStatusForDisplay(task.status);
+          
+          // Build description with status
+          const description = this.buildCalendarDescription(task, statusDisplay);
+          
           // Create or update calendar event
           if (task.calendarEventId) {
             // Update existing event
@@ -350,8 +356,8 @@ export class TaskController {
               assignee.calendarRefreshToken,
               task.calendarEventId,
               {
-                summary: task.title,
-                description: task.description || `Task assigned in project`,
+                summary: `${task.title} [${statusDisplay}]`,
+                description: description,
                 start: task.deadline,
                 end: task.deadline,
               }
@@ -362,8 +368,8 @@ export class TaskController {
             const eventId = await calendarService.createEvent(
               assignee.calendarRefreshToken,
               {
-                summary: task.title,
-                description: task.description || `Task assigned in project`,
+                summary: `${task.title} [${statusDisplay}]`,
+                description: description,
                 start: task.deadline,
                 end: task.deadline,
               }
@@ -382,6 +388,48 @@ export class TaskController {
       logger.error('Error syncing task to calendars:', error);
       // Don't throw error - calendar sync is optional
     }
+  }
+
+  /**
+   * Helper method: Format status for display in calendar
+   */
+  private formatStatusForDisplay(status: string): string {
+    const statusMap: { [key: string]: string } = {
+      'not_started': 'Not Started',
+      'in_progress': 'In Progress',
+      'completed': 'Completed',
+      'blocked': 'Blocked',
+      'backlog': 'Backlog'
+    };
+    
+    return statusMap[status] || status;
+  }
+
+  /**
+   * Helper method: Build calendar event description with status and task details
+   */
+  private buildCalendarDescription(task: any, statusDisplay: string): string {
+    const parts: string[] = [];
+    
+    // Add status
+    parts.push(`Status: ${statusDisplay}`);
+    
+    // Add task description if available
+    if (task.description) {
+      parts.push(`\nDescription: ${task.description}`);
+    }
+    
+    // Add assignees info if multiple
+    if (task.assignees && task.assignees.length > 1) {
+      parts.push(`\nAssignees: ${task.assignees.length} team members`);
+    }
+    
+    // Add default message
+    if (!task.description) {
+      parts.push(`\nTask assigned in project`);
+    }
+    
+    return parts.join('');
   }
 
   /**
